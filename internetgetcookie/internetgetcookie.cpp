@@ -13,172 +13,245 @@ void ShowUsage()
 	printf("INTERNETGETCOOKIE  version 1.2\r\n");
 	printf("\r\n");
 	printf("pierrelc@microsoft.com June 2020\r\n");
-	printf("Usage: INTERNETGETCOOKIE accepts an URL as parameter.\r\n");
+	printf("Usage: INTERNETGETCOOKIE accepts an URL as parameter and optionaly a cookie name.\r\n");
+	printf("internetgetcookie url [cookiename]\r\n");
 	printf("See https://docs.microsoft.com/en-us/windows/win32/wininet/managing-cookies\r\n");
 	printf("and https://docs.microsoft.com/en-us/windows/win32/api/wininet/nf-wininet-internetgetcookieexa");
 }
 
 int main(int argc, char* argv[])
 {
-	if (argc != 2)
+	if ((argc != 2) && (argc != 3))
 	{
 		ShowUsage();
 		exit(0L);
 	}
-	WCHAR wszUrl[INTERNET_MAX_URL_LENGTH];
+	WCHAR wszUrl[INTERNET_MAX_URL_LENGTH]=L"";
+	WCHAR wszCookieName[INTERNET_MAX_URL_LENGTH] = L"";
 	MultiByteToWideChar(CP_ACP, 0, argv[1], strlen(argv[1]), wszUrl, INTERNET_MAX_URL_LENGTH);
 	wszUrl[strlen(argv[1])] = 0;
-	wprintf(L"Calling InternetGetCookie for url %s\r\n", wszUrl);
+	wprintf(L"Url : %s\r\n", wszUrl);
 
-	LPTSTR lpszData = NULL;   // buffer to hold the cookie data
-	DWORD dwSize = 0;           // variable to get the buffer size needed
-	BOOL bReturn;
-	// Insert code to retrieve the URL.
+	if (argc == 2)
+	{
+		
+
+		LPTSTR lpszData = NULL;   // buffer to hold the cookie data
+		DWORD dwSize = 0;           // variable to get the buffer size needed
+		BOOL bReturn;
+		// Insert code to retrieve the URL.
 
 retry:
-	// The first call to InternetGetCookie will get the required
-	// buffer size needed to download the cookie data.
-	bReturn = InternetGetCookie(wszUrl, NULL, lpszData, &dwSize);
-	if (bReturn  == FALSE)
-	{
-		DWORD dwError = GetLastError();
-		// Check for an insufficient buffer error.
-		if (dwError == ERROR_INSUFFICIENT_BUFFER)
+		// The first call to InternetGetCookie will get the required
+		// buffer size needed to download the cookie data.
+		wprintf(L"Calling InternetGetCookie for url %s\r\n", wszUrl);
+		bReturn = InternetGetCookie(wszUrl, NULL, lpszData, &dwSize);
+		wprintf(L"InternetGetCookie returning %d dwSize = %d\r\n", bReturn, dwSize);
+		if (bReturn == FALSE)
 		{
-			// Allocate the necessary buffer.
-			lpszData = new TCHAR[dwSize];
-
-			// Try the call again.
-			goto retry;
-		}
-		else
-		{
-			// Error handling code.			
-			if (dwError == ERROR_NO_MORE_ITEMS)
+			DWORD dwError = GetLastError();
+			// Check for an insufficient buffer error.
+			if (dwError == ERROR_INSUFFICIENT_BUFFER)
 			{
-				printf("There is no cookie for the specified URL and all its parents.");
-				exit(1L);
+				// Allocate the necessary buffer.
+				lpszData = new TCHAR[dwSize];
+				wprintf(L"Allocating %d bytes and retrying\r\n", dwSize);
+				// Try the call again.
+				goto retry;
 			}
 			else
 			{
-				printf("InternetGetCookie failed with error %d", dwError);
-				exit(-1L);
+				// Error handling code.			
+				if (dwError == ERROR_NO_MORE_ITEMS)
+				{
+					printf("There is no cookie for the specified URL and all its parents.\r\n");
+					exit(1L);
+				}
+				else
+				{
+					printf("InternetGetCookie failed with error %d\r\n", dwError);
+					exit(-1L);
+				}
 			}
 		}
-	}
-	else
-	{
-		if (lpszData)
+		else
 		{
-			// Code to display the cookie data.
-			printf("Cookie data : %S\r\n\r\n", lpszData);
-			//+		lpszData	0x010dee48 L"WebLanguagePreference=fr-fr; WT_NVR=0=/:1=web; SRCHUID=V=2&GUID=9087E76D5D4343F5BFE07F75D80435E4&dmnchg=1; SRCHD=AF=NOFORM; WT_FPC=id=2186e6812f80d94b48a1502956146257:lv=1502956146257:ss=1502956146257...	wchar_t *
-			// Searching token separated by ";"
-			WCHAR seps[] = L";";
-			WCHAR *token = NULL;
-			WCHAR *next_token = NULL;
-
-			//get the first token:
-			token = wcstok_s(lpszData, seps, &next_token);
-
-			// While there are token
-			while (token != NULL)
+			printf("InternetGetCookie succeeded\r\n");
+			if (lpszData)
 			{
-				// Get next token:
-				if (token != NULL)
+				// Code to display the cookie data.
+				printf("Cookie data : %S\r\n\r\n", lpszData);
+				//+		lpszData	0x010dee48 L"WebLanguagePreference=fr-fr; WT_NVR=0=/:1=web; SRCHUID=V=2&GUID=9087E76D5D4343F5BFE07F75D80435E4&dmnchg=1; SRCHD=AF=NOFORM; WT_FPC=id=2186e6812f80d94b48a1502956146257:lv=1502956146257:ss=1502956146257...	wchar_t *
+				// Searching token separated by ";"
+				WCHAR seps[] = L";";
+				WCHAR* token = NULL;
+				WCHAR* next_token = NULL;
+
+				//get the first token:
+				token = wcstok_s(lpszData, seps, &next_token);
+
+				// While there are token
+				while (token != NULL)
 				{
-					//wprintf(L" %s\n", token);
-					unsigned int CookieLen = wcslen(token);
-					unsigned int i;
-					for (i = 0; i < CookieLen; i++)
+					// Get next token:
+					if (token != NULL)
 					{
-						if (*(token+i )== L'=')
+						//wprintf(L" %s\n", token);
+						unsigned int CookieLen = wcslen(token);
+						unsigned int i;
+						for (i = 0; i < CookieLen; i++)
 						{
-							*(token + i) = '\0';
-							WCHAR *CookieName = token;
-							//strip initial space if needed
-							if (CookieName[0] == ' ')
-							{ 
-								CookieName += 1;
-							}
-							WCHAR *CookieValue = token + i + 1;
-							wprintf(L"Name=%s", CookieName);
-							wprintf(L";Value=%s\r\n", CookieValue);
-
-							LPTSTR lpszDataEx = NULL;   // buffer to hold the cookie data
-							wprintf(L"Calling InternetGetCookieEx for url %s and cookie name %s and flag INTERNET_COOKIE_THIRD_PARTY\r\n", wszUrl, CookieName);
-retryEx:								
-							bReturn = InternetGetCookieEx(wszUrl, CookieName, lpszDataEx, &dwSize, INTERNET_COOKIE_THIRD_PARTY, NULL);
-							if (bReturn == FALSE)
+							if (*(token + i) == L'=')
 							{
-								if (lpszDataEx)
+								*(token + i) = '\0';
+								WCHAR* CookieName = token;
+								//strip initial space if needed
+								if (CookieName[0] == ' ')
 								{
-									printf("No Third party cookie\r\n");
+									CookieName += 1;
 								}
-								DWORD dwError = GetLastError();
-								// Check for an insufficient buffer error.
-								if (dwError == ERROR_INSUFFICIENT_BUFFER)
-								{
-									// Allocate the necessary buffer.
-									lpszDataEx = new TCHAR[dwSize];
+								WCHAR* CookieValue = token + i + 1;
+								wprintf(L"Name=%s", CookieName);
+								wprintf(L"Cookie Value=%s\r\n", CookieValue);
 
-									// Try the call again.
-									goto retryEx;
-								}
-								else
+								LPTSTR lpszCookieData = NULL;   // buffer to hold the cookie data
+								wprintf(L"Calling InternetGetCookieEx for url %s and cookie name %s and flag INTERNET_COOKIE_THIRD_PARTY\r\n", wszUrl, CookieName);
+							retryEx:
+								bReturn = InternetGetCookieEx(wszUrl, CookieName, lpszCookieData, &dwSize, INTERNET_COOKIE_THIRD_PARTY, NULL);
+								wprintf(L"InternetGetCookieEx returning %d dwSize : %d\r\n", bReturn, dwSize);
+								if (bReturn == TRUE)
 								{
-									// Error handling code.			
-									if (dwError == ERROR_NO_MORE_ITEMS)
+									wprintf(L"InternetGetCookieEx succeeded\r\n");
+									wprintf(L"Third party cookie\r\n");
+									if (lpszCookieData)
 									{
-										printf("There is no cookie for the specified URL and all its parents.");
-										exit(1L);
+										wprintf(L"Cookie data :%s\r\n", lpszCookieData);
 									}
 									else
 									{
-										printf("InternetGetCookieEx failed with error %d", dwError);
-										exit(-1L);
+										wprintf(L"No Cookie data. If NULL is passed to lpszCookieData, the call will succeed and the function will not set ERROR_INSUFFICIENT_BUFFER.\r\n");
+										wprintf(L"allocating %d bytes and retrying\r\n", dwSize);
+										// Allocate the necessary buffer.
+										lpszCookieData = new TCHAR[dwSize];
+										// Try the call again.
+										goto retryEx;
 									}
 								}
-							}
-							else
-							{
-								if (lpszDataEx)
+
+								if (bReturn == FALSE)
 								{
-									printf("Third party cookie\r\n");
+									DWORD dwError = GetLastError();
+									wprintf(L"InternetGetCookieEx failed with error : %d %X\r\n", dwError, dwError);
+
+									// Check for an insufficient buffer error.
+									if (dwError == ERROR_INSUFFICIENT_BUFFER)
+									{
+										printf("ERROR_INSUFFICIENT_BUFFER: allocating %d bytes and retrying\r\n", dwSize);
+										// Allocate the necessary buffer.
+										lpszCookieData = new TCHAR[dwSize];
+										// Try the call again.
+										goto retryEx;
+									}
+									if (dwError == ERROR_NO_MORE_ITEMS)
+									{
+										printf("ERROR_NO_MORE_ITEMS: No cookied data as specified could be retrieved\r\n");
+									}
+									if (dwError == ERROR_INVALID_PARAMETER)
+									{
+										printf("ERROR_INVALID_PARAMETER: either the pchURL or the pcchCookieData parameter is NULL.\r\n");
+									}
+									printf("Unexpected error\r\n");
 								}
-								else
-								{
-
-									// Allocate the necessary buffer.
-									lpszDataEx = new TCHAR[dwSize];
-
-									// Try the call again.
-									goto retryEx;
-
-								}
-								
+								break;
 							}
-
-							break;
 						}
+						token = wcstok_s(NULL, seps, &next_token);
 					}
-					token = wcstok_s(NULL, seps, &next_token);
 				}
-			}
-		}  //end if lpszData
-		else
-		{
+			}  //end if lpszData
+			else
+			{
 
 				// Allocate the necessary buffer.
 				lpszData = new TCHAR[dwSize];
 
 				// Try the call again.
 				goto retry;
-			
+
+			}
+
+			// Release the memory allocated for the buffer.
+			delete[]lpszData;
+		}
+	}
+	if (argc == 3)
+	{
+
+		MultiByteToWideChar(CP_ACP, 0, argv[2], strlen(argv[2]), wszCookieName, INTERNET_MAX_URL_LENGTH);
+		wszUrl[strlen(argv[1])] = 0;
+		wprintf(L"Cookie Name : %s\r\n", wszCookieName);
+		BOOL bReturn;
+		DWORD dwSize = 0;
+
+		LPTSTR lpszCookieData = NULL;   // buffer to hold the cookie data
+		DWORD dwFlags = 0L;
+
+	retryEx2:
+		wprintf(L"Calling InternetGetCookieEx for url %s and cookie name %s dwFlags: %d dwSize :%d\r\n", wszUrl, wszCookieName, dwFlags, dwSize);
+		bReturn = InternetGetCookieEx(wszUrl, wszCookieName, lpszCookieData, &dwSize, dwFlags, NULL);
+		wprintf(L"InternetGetCookieEx returning %d dwSize : %d\r\n", bReturn, dwSize);
+		if (bReturn == TRUE)
+		{
+			wprintf(L"InternetGetCookieEx succeeded\r\n");
+			wprintf(L"HttpOnly cookie\r\n");
+			if (lpszCookieData)
+			{
+				wprintf(L"Cookie data :%s\r\n", lpszCookieData);
+			}
+			else
+			{
+				wprintf(L"No Cookie data. If NULL is passed to lpszCookieData, the call will succeed and the function will not set ERROR_INSUFFICIENT_BUFFER\r\n");
+				wprintf(L"allocating %d bytes and retrying\r\n", dwSize);
+				// Allocate the necessary buffer.
+				lpszCookieData = new TCHAR[dwSize];
+				// Try the call again.
+				goto retryEx2;
+			}
 		}
 
-		// Release the memory allocated for the buffer.
-		delete[]lpszData;
+		if (bReturn == FALSE)
+		{
+			DWORD dwError = GetLastError();
+			wprintf(L"InternetGetCookieEx failed with error : %d %X\r\n", dwError, dwError);
+
+			// Check for an insufficient buffer error.
+			if (dwError == ERROR_INSUFFICIENT_BUFFER)
+			{
+				wprintf(L"ERROR_INSUFFICIENT_BUFFER: allocating %d bytes and retrying\r\n", dwSize);
+				// Allocate the necessary buffer.
+				lpszCookieData = new TCHAR[dwSize];
+				// Try the call again.
+				goto retryEx2;
+			}
+			else if (dwError == ERROR_NO_MORE_ITEMS)
+			{
+				wprintf(L"ERROR_NO_MORE_ITEMS: No cookied data as specified could be retrieved\r\n");
+				if (dwFlags == 0L)
+				{
+					wprintf(L"Re-trying with INTERNET_COOKIE_HTTPONLY flag\r\n");
+					dwFlags = INTERNET_COOKIE_HTTPONLY;
+					goto retryEx2;
+				}
+			}
+			else if (dwError == ERROR_INVALID_PARAMETER)
+			{
+				wprintf(L"ERROR_INVALID_PARAMETER: either the pchURL or the pcchCookieData parameter is NULL.\r\n");
+			}
+			else
+			{
+				wprintf(L"Unexpected error\r\n");
+			}
+		}
 	}
 	return 0L;
 }
