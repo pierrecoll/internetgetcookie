@@ -7,6 +7,7 @@
 #include <WinInet.h>
 
 #pragma comment(lib,"wininet.lib")
+#pragma comment(lib,"urlmon.lib")
 
 void ShowUsage()
 {	
@@ -63,6 +64,9 @@ void ExtractToken(LPTSTR lpszData)
 	}
 }
 
+WCHAR wszUrl[INTERNET_MAX_URL_LENGTH] = L"";
+WCHAR wszCookieName[INTERNET_MAX_URL_LENGTH] = L"";
+
 int main(int argc, char* argv[])
 {
 	if ((argc != 2) && (argc != 3))
@@ -70,46 +74,79 @@ int main(int argc, char* argv[])
 		ShowUsage();
 		exit(0L);
 	}
-	WCHAR wszUrl[INTERNET_MAX_URL_LENGTH]=L"";
-	WCHAR wszCookieName[INTERNET_MAX_URL_LENGTH] = L"";
+
 	MultiByteToWideChar(CP_ACP, 0, argv[1], strlen(argv[1]), wszUrl, INTERNET_MAX_URL_LENGTH);
 	wszUrl[strlen(argv[1])] = 0;
 	wprintf(L"Url : %s\r\n", wszUrl);
 
-
 	if (argc == 2)
 	{
-		/*unsigned long InternetGetCookieState=0L;
-		if (InternetGetPerSiteCookieDecisionW(L"microsoft.com", &InternetGetCookieState))
+
+		WCHAR szDecodedUrl[INTERNET_MAX_URL_LENGTH]=L"";
+		DWORD cchDecodedUrl = INTERNET_MAX_URL_LENGTH;
+		WCHAR szOut[INTERNET_MAX_URL_LENGTH]=L"";
+
+		wprintf(L"Calling CoInternetParseUrl  with PARSE_UNESCAPE for url : %s\r\n", wszUrl);
+		HRESULT hr = CoInternetParseUrl(wszUrl, PARSE_CANONICALIZE, PARSE_UNESCAPE, szDecodedUrl,
+			INTERNET_MAX_URL_LENGTH, &cchDecodedUrl, 0);
+		if (hr == S_OK)
 		{
-			wprintf(L"InternetGetPerSiteCookieDecisionW returning cookie state : %X\r\n", InternetGetCookieState);
-			switch (InternetGetCookieState)
+			printf("CANONICALIZE: %S\n", szDecodedUrl);
+			wprintf(L"Calling CoInternetParseUrl  with PARSE_SCHEMA for decoded url : %s\r\n", szDecodedUrl);
+			hr = CoInternetParseUrl(szDecodedUrl, PARSE_SCHEMA, 0, szOut,
+				INTERNET_MAX_URL_LENGTH, &cchDecodedUrl, 0);
+			if (hr == S_OK)
+				printf("SCHEME: %S\n", szOut);
+			else
+				printf("SCHEME: Error %08x\n", hr);
+
+			hr = CoInternetParseUrl(szDecodedUrl, PARSE_DOMAIN, 0, szOut,
+				INTERNET_MAX_URL_LENGTH, &cchDecodedUrl, 0);
+			wprintf(L"Calling CoInternetParseUrl  with PARSE_DOMAIN for decoded url : %s\r\n", wszUrl);
+			if (hr == S_OK)
 			{
-			case COOKIE_STATE_UNKNOWN:
-				wprintf(L"COOKIE_STATE_UNKNOWN\r\n");
-				break;
-			case COOKIE_STATE_ACCEPT:
-				wprintf(L"COOKIE_STATE_ACCEPT\r\n");
-				break;
-			case COOKIE_STATE_PROMPT:
-				wprintf(L"COOKIE_STATE_PROMPT\r\n");
-				break;
-			case COOKIE_STATE_LEASH:
-				wprintf(L"COOKIE_STATE_LEASH\r\n");
-				break;
-			case COOKIE_STATE_DOWNGRADE:
-				wprintf(L"COOKIE_STATE_DOWNGRADE\r\n");
-				break;
-			case COOKIE_STATE_REJECT:
-				wprintf(L"COOKIE_STATE_REJECT\r\n");
-				break;
-			default:
-				wprintf(L"COOKIE_STATE_UNKNOWN\r\n");
-				break;
+				printf("DOMAIN: %S\n", szOut);
+				unsigned long InternetGetCookieState = 0L;
+				wprintf(L"Calling InternetGetPerSiteCookieDecisionW for domain : %s\r\n", szOut);
+				if (InternetGetPerSiteCookieDecisionW(szOut, &InternetGetCookieState))
+				{
+					wprintf(L"InternetGetPerSiteCookieDecisionW returning cookie state : %X\r\n", InternetGetCookieState);
+					switch (InternetGetCookieState)
+					{
+					case COOKIE_STATE_UNKNOWN:
+						wprintf(L"COOKIE_STATE_UNKNOWN\r\n");
+						break;
+					case COOKIE_STATE_ACCEPT:
+						wprintf(L"COOKIE_STATE_ACCEPT\r\n");
+						break;
+					case COOKIE_STATE_PROMPT:
+						wprintf(L"COOKIE_STATE_PROMPT\r\n");
+						break;
+					case COOKIE_STATE_LEASH:
+						wprintf(L"COOKIE_STATE_LEASH\r\n");
+						break;
+					case COOKIE_STATE_DOWNGRADE:
+						wprintf(L"COOKIE_STATE_DOWNGRADE\r\n");
+						break;
+					case COOKIE_STATE_REJECT:
+						wprintf(L"COOKIE_STATE_REJECT\r\n");
+						break;
+					default:
+						wprintf(L"COOKIE_STATE_UNKNOWN\r\n");
+						break;
+					}
+				}
+				else
+				{
+					wprintf(L"InternetGetPerSiteCookieDecisionW returning false\r\n\r\n");
+				}
 			}
-		}*/
-
-
+			else
+				printf("DOMAIN: Error %08x\n", hr);
+		}
+		else
+			printf("CANONICALIZE: Error %08x\n", hr);
+		
 		LPTSTR lpszData = NULL;   // buffer to hold the cookie data
 		DWORD dwSize = 0;           // variable to get the buffer size needed
 		BOOL bReturn;
