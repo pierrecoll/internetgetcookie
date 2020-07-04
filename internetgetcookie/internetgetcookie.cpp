@@ -11,7 +11,7 @@
 
 void ShowUsage()
 {	
-	printf("INTERNETGETCOOKIE  version 1.2\r\n");
+	printf("INTERNETGETCOOKIE  version 1.3\r\n");
 	printf("\r\n");
 	printf("pierrelc@microsoft.com June 2020\r\n");
 	printf("Usage: INTERNETGETCOOKIE accepts an URL as parameter and optionaly a cookie name.\r\n");
@@ -199,6 +199,62 @@ retry:
 				lpszData = new TCHAR[dwSize];
 				// Try the call again.
 				goto retry;
+			}
+
+			// Release the memory allocated for the buffer.
+			delete[]lpszData;
+		}
+
+		lpszData = NULL;   // buffer to hold the cookie data
+		dwSize = 0;           // variable to get the buffer size needed
+		DWORD dwFlags = INTERNET_COOKIE_NON_SCRIPT;
+	retryEx:
+		// The first call to InternetGetCookieEx will get the required
+		// buffer size needed to download the cookie data.
+		wprintf(L"Calling InternetGetCookieEx for url %s with no cookie name and flag INTERNET_COOKIE_NON_SCRIPT\r\n", wszUrl);
+		bReturn = InternetGetCookieEx(wszUrl, NULL, lpszData, &dwSize,dwFlags,NULL);
+		wprintf(L"InternetGetCookieEx returning %d dwSize = %d\r\n", bReturn, dwSize);
+		if (bReturn == FALSE)
+		{
+			DWORD dwError = GetLastError();
+			// Check for an insufficient buffer error.
+			if (dwError == ERROR_INSUFFICIENT_BUFFER)
+			{
+				// Allocate the necessary buffer.
+				lpszData = new TCHAR[dwSize];
+				wprintf(L"Allocating %d bytes and retrying\r\n", dwSize);
+				// Try the call again.
+				goto retryEx;
+			}
+			else
+			{
+				// Error handling code.			
+				if (dwError == ERROR_NO_MORE_ITEMS)
+				{
+					printf("There is no cookie for the specified URL and all its parents.\r\n");
+					exit(1L);
+				}
+				else
+				{
+					printf("InternetGetCookieEx failed with error %d\r\n", dwError);
+					exit(-1L);
+				}
+			}
+		}
+		else
+		{
+			printf("InternetGetCookieEx succeeded\r\n");
+			printf("Cookie data : %S\r\n\r\n", lpszData);
+			if (lpszData)
+			{
+				ExtractToken(lpszData);
+			}
+			else
+			{
+				// Allocate the necessary buffer.
+				lpszData = new TCHAR[dwSize];
+				// Try the call again.
+				goto retryEx;
 			}
 
 			// Release the memory allocated for the buffer.
