@@ -11,16 +11,17 @@
 
 void ShowUsage()
 {	
-	printf("INTERNETGETCOOKIE  version 1.3\r\n");
+	printf("INTERNETGETCOOKIE  version 1.4\r\n");
 	printf("\r\n");
-	printf("pierrelc@microsoft.com June 2020\r\n");
+	printf("pierrelc@microsoft.com August 2020\r\n");
 	printf("Usage: INTERNETGETCOOKIE accepts an URL as parameter and optionaly a cookie name.\r\n");
 	printf("internetgetcookie url [cookiename]\r\n");
+	printf("When cookiename is used, gives the option to delete the cookie (set expiration date in the past)\r\n");
 	printf("See https://docs.microsoft.com/en-us/windows/win32/wininet/managing-cookies\r\n");
 	printf("and https://docs.microsoft.com/en-us/windows/win32/api/wininet/nf-wininet-internetgetcookieexa");
 }
 
-void ExtractToken(LPTSTR lpszData)
+WCHAR* ExtractToken(LPTSTR lpszData)
 {
 	// Code to display the cookie data.
 	//+		lpszData	0x010dee48 L"WebLanguagePreference=fr-fr; WT_NVR=0=/:1=web; SRCHUID=V=2&GUID=9087E76D5D4343F5BFE07F75D80435E4&dmnchg=1; SRCHD=AF=NOFORM; WT_FPC=id=2186e6812f80d94b48a1502956146257:lv=1502956146257:ss=1502956146257...	wchar_t *
@@ -29,6 +30,7 @@ void ExtractToken(LPTSTR lpszData)
 	WCHAR seps[] = L";";
 	WCHAR* token = NULL;
 	WCHAR* next_token = NULL;
+	WCHAR* CookieName = NULL;
 
 	//get the first token:
 	token = wcstok_s(lpszData, seps, &next_token);
@@ -47,7 +49,7 @@ void ExtractToken(LPTSTR lpszData)
 				if (*(token + i) == L'=')
 				{
 					*(token + i) = '\0';
-					WCHAR* CookieName = token;
+					CookieName = token;
 					//strip initial space if needed
 					if (CookieName[0] == ' ')
 					{
@@ -62,6 +64,7 @@ void ExtractToken(LPTSTR lpszData)
 			token = wcstok_s(NULL, seps, &next_token);
 		}
 	}
+	return CookieName;
 }
 
 WCHAR wszUrl[INTERNET_MAX_URL_LENGTH] = L"";
@@ -138,7 +141,7 @@ int main(int argc, char* argv[])
 				}
 				else
 				{
-					wprintf(L"InternetGetPerSiteCookieDecisionW returning false\r\n\r\n");
+					wprintf(L"InternetGetPerSiteCookieDecisionW returning false.\r\n\r\n");
 				}
 			}
 			else
@@ -166,7 +169,7 @@ retry:
 			{
 				// Allocate the necessary buffer.
 				lpszData = new TCHAR[dwSize];
-				wprintf(L"Allocating %d bytes and retrying\r\n", dwSize);
+				wprintf(L"Allocating %d bytes and retrying.\r\n", dwSize);
 				// Try the call again.
 				goto retry;
 			}
@@ -180,14 +183,14 @@ retry:
 				}
 				else
 				{
-					printf("InternetGetCookie failed with error %d\r\n", dwError);
+					printf("InternetGetCookie failed with error %d.\r\n", dwError);
 					exit(-1L);
 				}
 			}
 		}
 		else
 		{
-			printf("InternetGetCookie succeeded\r\n");
+			printf("InternetGetCookie succeeded.\r\n");
 			printf("Cookie data : %S\r\n\r\n", lpszData);
 			if (lpszData)
 			{
@@ -211,9 +214,9 @@ retry:
 	retryEx:
 		// The first call to InternetGetCookieEx will get the required
 		// buffer size needed to download the cookie data.
-		wprintf(L"Calling InternetGetCookieEx for url %s with no cookie name and flag INTERNET_COOKIE_NON_SCRIPT\r\n", wszUrl);
+		wprintf(L"Calling InternetGetCookieEx for url %s with no cookie name and flag INTERNET_COOKIE_NON_SCRIPT.\r\n", wszUrl);
 		bReturn = InternetGetCookieEx(wszUrl, NULL, lpszData, &dwSize,dwFlags,NULL);
-		wprintf(L"InternetGetCookieEx returning %d dwSize = %d\r\n", bReturn, dwSize);
+		wprintf(L"InternetGetCookieEx returning %d dwSize = %d.\r\n", bReturn, dwSize);
 		if (bReturn == FALSE)
 		{
 			DWORD dwError = GetLastError();
@@ -222,7 +225,8 @@ retry:
 			{
 				// Allocate the necessary buffer.
 				lpszData = new TCHAR[dwSize];
-				wprintf(L"Allocating %d bytes and retrying\r\n", dwSize);
+				wprintf(L"No Cookie data (If NULL is passed to lpszCookieData, the call will succeed and the function will not set ERROR_INSUFFICIENT_BUFFER)\r\n");
+				wprintf(L"Allocating %d bytes and retrying.\r\n", dwSize);
 				// Try the call again.
 				goto retryEx;
 			}
@@ -236,14 +240,14 @@ retry:
 				}
 				else
 				{
-					printf("InternetGetCookieEx failed with error %d\r\n", dwError);
+					printf("InternetGetCookieEx failed with error %d.\r\n", dwError);
 					exit(-1L);
 				}
 			}
 		}
 		else
 		{
-			printf("InternetGetCookieEx succeeded\r\n");
+			printf("InternetGetCookieEx succeeded.\r\n");
 			printf("Cookie data : %S\r\n\r\n", lpszData);
 			if (lpszData)
 			{
@@ -266,7 +270,7 @@ retry:
 
 		MultiByteToWideChar(CP_ACP, 0, argv[2], strlen(argv[2]), wszCookieName, INTERNET_MAX_URL_LENGTH);
 		wszUrl[strlen(argv[1])] = 0;
-		wprintf(L"Cookie Name : %s\r\n", wszCookieName);
+		wprintf(L"Cookie Name : %s.\r\n", wszCookieName);
 		BOOL bReturn;
 		DWORD dwSize = 0;
 
@@ -280,16 +284,50 @@ retry:
 		if (bReturn == TRUE)
 		{
 			wprintf(L"InternetGetCookieEx succeeded\r\n");
-			wprintf(L"HttpOnly cookie\r\n");
 			if (lpszCookieData)
 			{
-				wprintf(L"Cookie data :%s\r\n", lpszCookieData);
-				ExtractToken(lpszCookieData);
+				wprintf(L"Cookie data : %s.\r\n", lpszCookieData);
+
+				printf("Type y if you want to delete the cookie or any other character to exit..........\r\n");
+				printf("\r\n");
+				char c;
+				c = (char)getchar();
+				if ((c == 'y') || (c == 'Y'))
+				{
+					getchar();  //to get cr
+					printf("Deleting (calling InternetSetCookie with expiration date set to Sat,01-Jan-2000 00:00:00 GMT) for cookie:\r\n");
+					WCHAR* CookieName = ExtractToken(lpszCookieData);
+					bReturn = InternetSetCookie(wszUrl, CookieName,
+						TEXT("expires = Sat,01-Jan-2000 00:00:00 GMT"));
+					if (bReturn == FALSE)
+					{
+						DWORD dwError = GetLastError();
+						wprintf(L"InternetSetCookie failed with error : %d %X\r\n", dwError, dwError);
+						if (dwError == ERROR_INVALID_OPERATION)
+						{
+							wprintf(L"ERROR_INVALID_OPERATION -> Calling InternetSetCookieEx with flag INTERNET_COOKIE_NON_SCRIPT\r\n");
+							bReturn = InternetSetCookieEx(wszUrl, CookieName,
+								TEXT("expires = Sat,01-Jan-2000 00:00:00 GMT"), INTERNET_COOKIE_NON_SCRIPT, 0);
+							if (bReturn == FALSE)
+							{
+								wprintf(L"InternetSetCookieEx failed with error : %d %X.\r\n", dwError, dwError);
+							}
+							else
+							{
+								wprintf(L"Calling InternetSetCookieEx to delete cookie %s succeeded.\r\n", CookieName);
+							}
+						}
+					}
+					else
+					{
+						wprintf(L"Calling InternetSetCookie to delete cookie %s succeeded.\r\n",CookieName);
+					}
+				}
 			}
 			else
 			{
-				wprintf(L"No Cookie data. If NULL is passed to lpszCookieData, the call will succeed and the function will not set ERROR_INSUFFICIENT_BUFFER\r\n");
-				wprintf(L"allocating %d bytes and retrying\r\n", dwSize);
+				wprintf(L"No Cookie data (If NULL is passed to lpszCookieData, the call will succeed and the function will not set ERROR_INSUFFICIENT_BUFFER)\r\n");
+				wprintf(L"Allocating %d bytes and retrying.\r\n", dwSize);
 				// Allocate the necessary buffer.
 				lpszCookieData = new TCHAR[dwSize];
 				// Try the call again.
