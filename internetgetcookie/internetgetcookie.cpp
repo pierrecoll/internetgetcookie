@@ -13,9 +13,9 @@
 
 void ShowUsage()
 {	
-	printf("INTERNETGETCOOKIE  version 1.4\r\n");
+	printf("INTERNETGETCOOKIE  version 1.5\r\n");
 	printf("\r\n");
-	printf("pierrelc@microsoft.com August 2020\r\n");
+	printf("pierrelc@microsoft.com September 2020\r\n");
 	printf("Usage: INTERNETGETCOOKIE accepts an URL as parameter and optionaly a cookie name.\r\n");
 	printf("internetgetcookie url [cookiename]\r\n");
 	printf("When cookiename is used, gives the option to delete the cookie (set expiration date in the past)\r\n");
