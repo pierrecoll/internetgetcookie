@@ -298,7 +298,7 @@ retry:
 					printf("Deleting (calling InternetSetCookie with expiration date set to Sat,01-Jan-2000 00:00:00 GMT) for cookie:\r\n");
 					WCHAR* CookieName = ExtractToken(lpszCookieData);
 					bReturn = InternetSetCookie(wszUrl, CookieName,
-						TEXT("expires = Sat,01-Jan-2000 00:00:00 GMT"));
+						TEXT(";expires=Sat,01-Jan-2000 00:00:00 GMT"));
 					if (bReturn == FALSE)
 					{
 						DWORD dwError = GetLastError();
@@ -307,7 +307,7 @@ retry:
 						{
 							wprintf(L"ERROR_INVALID_OPERATION -> Calling InternetSetCookieEx with flag INTERNET_COOKIE_NON_SCRIPT\r\n");
 							bReturn = InternetSetCookieEx(wszUrl, CookieName,
-								TEXT("expires = Sat,01-Jan-2000 00:00:00 GMT"), INTERNET_COOKIE_NON_SCRIPT, 0);
+								TEXT(";expires=Sat,01-Jan-2000 00:00:00 GMT"), INTERNET_COOKIE_NON_SCRIPT, 0);
 							if (bReturn == FALSE)
 							{
 								wprintf(L"InternetSetCookieEx failed with error : %d %X.\r\n", dwError, dwError);
