@@ -5,9 +5,11 @@
 #include "stdio.h"
 #include <Windows.h>
 #include <WinInet.h>
+#include <iepmapi.h>
 
 #pragma comment(lib,"wininet.lib")
 #pragma comment(lib,"urlmon.lib")
+#pragma comment(lib,"iepmapi.lib")
 
 void ShowUsage()
 {	
@@ -178,8 +180,18 @@ retry:
 				// Error handling code.			
 				if (dwError == ERROR_NO_MORE_ITEMS)
 				{
-					printf("There is no cookie for the specified URL and all its parents.\r\n");
-					exit(1L);
+					HRESULT hr = IEIsProtectedModeURL(wszUrl);
+					if (SUCCEEDED(hr))
+					{
+						printf("This is a protected mode url so the tool needs to be run from a low integrity process.\r\n");
+						//IEGetProtectedModeCookie requires a cookie name!
+						exit(1L);
+					}
+					else
+					{						
+						printf("There is no cookie for the specified URL and all its parents.\r\n");
+						exit(1L);
+					}
 				}
 				else
 				{
