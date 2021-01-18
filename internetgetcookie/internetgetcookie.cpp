@@ -6,6 +6,7 @@
 #include <Windows.h>
 #include <WinInet.h>
 #include <iepmapi.h>
+#include <sddl.h>
 
 #pragma comment(lib,"wininet.lib")
 #pragma comment(lib,"urlmon.lib")
@@ -13,6 +14,7 @@
 
 DWORD GetProcessIntegrityLevel();
 DWORD ErrorPrint();
+void CreateLowProcess();
 
 void ShowUsage()
 {	
@@ -133,6 +135,10 @@ retry:
 
 						printf("This is a protected mode url so the tool needs to be run from a low or medium integrity process.\r\n");
 						//IEGetProtectedModeCookie requires a cookie name? or can only be calld from ie!, 
+
+						DWORD dwProcessIntegrityLevel;
+						dwProcessIntegrityLevel = GetProcessIntegrityLevel();
+
 						hr=IEGetProtectedModeCookie(wszUrl, NULL, szActualCookie, &dwSize,dwFlags);
 						if (SUCCEEDED(hr))
 						{
@@ -148,8 +154,25 @@ retry:
 							{
 								printf("IEGetProtectedModeCookie may fail when called from an elevated command prompt\r\n");
 							}
-							DWORD dwProcessIntegrityLevel;
-							dwProcessIntegrityLevel = GetProcessIntegrityLevel();
+							if (dwProcessIntegrityLevel == SECURITY_MANDATORY_HIGH_RID)
+							{
+								printf("Starting low cannot be done from an administrative command prompt (High Integrity Level)\r\n");
+								exit(-1L);
+							}
+							else if (dwProcessIntegrityLevel == SECURITY_MANDATORY_LOW_RID)
+							{
+								//¨process already Low 
+								printf("Process already running at low integrity\r\n");
+							}
+							else if (dwProcessIntegrityLevel == SECURITY_MANDATORY_MEDIUM_RID)
+							{
+								CreateLowProcess();
+								exit(0L);
+							}
+							else
+							{
+								printf("Unexpected integity level for -low option\r\n");
+							}
 						}
 					}
 					else
@@ -350,6 +373,84 @@ retry:
 	return 0L;
 }
 
+
+//From https://msdn.microsoft.com/en-us/library/bb250462(VS.85).aspx(d=robot)
+void CreateLowProcess()
+{
+	BOOL bRet;
+	HANDLE hToken;
+	HANDLE hNewToken;
+
+	// Notepad is used as an example
+	WCHAR wszProcessName[MAX_PATH];
+	GetModuleFileNameW(NULL, wszProcessName, MAX_PATH - 1);
+	WCHAR* lpwszCommandLine = GetCommandLineW();
+
+	// Low integrity SID
+	WCHAR wszIntegritySid[20] = L"S-1-16-4096";
+	//WCHAR wszIntegritySid[129] = L"S-1-15-2-3624051433-2125758914-1423191267-1740899205-1073925389-3782572162-737981194-4256926629-1688279915-2739229046-3928706915";
+	PSID pIntegritySid = NULL;
+
+	TOKEN_MANDATORY_LABEL TIL = { 0 };
+	PROCESS_INFORMATION ProcInfo = { 0 };
+	STARTUPINFOW StartupInfo = { 0 };
+	ULONG ExitCode = 0;
+
+	if (OpenProcessToken(GetCurrentProcess(), MAXIMUM_ALLOWED, &hToken))
+	{
+		if (DuplicateTokenEx(hToken, MAXIMUM_ALLOWED, NULL,
+			SecurityImpersonation, TokenPrimary, &hNewToken))
+		{
+			if (ConvertStringSidToSidW(wszIntegritySid, &pIntegritySid))
+			{
+				TIL.Label.Attributes = SE_GROUP_INTEGRITY;
+				TIL.Label.Sid = pIntegritySid;
+
+				// Set the process integrity level
+				if (SetTokenInformation(hNewToken, TokenIntegrityLevel, &TIL,
+					sizeof(TOKEN_MANDATORY_LABEL) + GetLengthSid(pIntegritySid)))
+				{
+					// Create the new process at Low integrity
+					bRet = CreateProcessAsUserW(hNewToken, wszProcessName,
+						lpwszCommandLine, NULL, NULL, FALSE,
+						0, NULL, NULL, &StartupInfo, &ProcInfo);
+					if (!bRet)
+					{
+						printf("CreateProcessAsUserW failed\r\n");
+						ErrorPrint();
+					}
+					else
+					{
+						printf("CreateProcessAsUser %ws with Low Integrity. Command line: %ws\r\n", wszProcessName, lpwszCommandLine);
+					}
+				}
+				else
+				{
+					printf("SetTokenInformation failed\r\n");
+					ErrorPrint();
+				}
+				LocalFree(pIntegritySid);
+			}
+			else
+			{
+				printf("ConvertStringSidToSidW failed\r\n");
+				ErrorPrint();
+			}
+			CloseHandle(hNewToken);
+		}
+		else
+		{
+			printf("DuplicateTokenEx failed\r\n");
+			ErrorPrint();
+		}
+		CloseHandle(hToken);
+	}
+	else
+	{
+		printf("OpenProcessToken failed\r\n");
+		ErrorPrint();
+	}
+}
 DWORD GetProcessIntegrityLevel()
 {
 	HANDLE hToken;
