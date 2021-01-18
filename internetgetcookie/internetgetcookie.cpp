@@ -11,9 +11,12 @@
 #pragma comment(lib,"urlmon.lib")
 #pragma comment(lib,"iepmapi.lib")
 
+DWORD GetProcessIntegrityLevel();
+DWORD ErrorPrint();
+
 void ShowUsage()
 {	
-	printf("INTERNETGETCOOKIE  version 1.6\r\n");
+	printf("INTERNETGETCOOKIE  version 1.7\r\n");
 	printf("\r\n");
 	printf("pierrelc@microsoft.com January 2021\r\n");
 	printf("Usage: INTERNETGETCOOKIE accepts an URL as parameter and optionaly a cookie name.\r\n");
@@ -143,8 +146,10 @@ retry:
 							printf("IEGetProtectedModeCookie KO: %X\r\n",dwError);  //getting 0x1f ERROR_GEN_FAILURE
 							if (dwError == 0x1F)
 							{
-								printf("IEGetProtectedModeCookie is failing when called from an elevated command prompt\r\n");
+								printf("IEGetProtectedModeCookie may fail when called from an elevated command prompt\r\n");
 							}
+							DWORD dwProcessIntegrityLevel;
+							dwProcessIntegrityLevel = GetProcessIntegrityLevel();
 						}
 					}
 					else
@@ -343,5 +348,74 @@ retry:
 	}
 
 	return 0L;
+}
+
+DWORD GetProcessIntegrityLevel()
+{
+	HANDLE hToken;
+	HANDLE hProcess;
+
+	DWORD dwLengthNeeded;
+	DWORD dwError = ERROR_SUCCESS;
+
+	PTOKEN_MANDATORY_LABEL pTIL = NULL;
+	DWORD dwIntegrityLevel;
+
+	hProcess = GetCurrentProcess();
+	if (OpenProcessToken(hProcess, TOKEN_QUERY |
+		TOKEN_QUERY_SOURCE, &hToken))
+	{
+		// Get the Integrity level.
+		if (!GetTokenInformation(hToken, TokenIntegrityLevel,
+			NULL, 0, &dwLengthNeeded))
+		{
+			dwError = GetLastError();
+			if (dwError == ERROR_INSUFFICIENT_BUFFER)
+			{
+				pTIL = (PTOKEN_MANDATORY_LABEL)LocalAlloc(0,
+					dwLengthNeeded);
+				if (pTIL != NULL)
+				{
+					if (GetTokenInformation(hToken, TokenIntegrityLevel,
+						pTIL, dwLengthNeeded, &dwLengthNeeded))
+					{
+						dwIntegrityLevel = *GetSidSubAuthority(pTIL->Label.Sid,
+							(DWORD)(UCHAR)(*GetSidSubAuthorityCount(pTIL->Label.Sid) - 1));
+
+						if (dwIntegrityLevel < SECURITY_MANDATORY_MEDIUM_RID)
+						{
+							// Low Integrity
+							wprintf(L"Running as Low Integrity Process\r\n");
+						}
+						else if (dwIntegrityLevel >= SECURITY_MANDATORY_MEDIUM_RID &&
+							dwIntegrityLevel < SECURITY_MANDATORY_HIGH_RID)
+						{
+							// Medium Integrity
+							wprintf(L"Running as Medium Integrity Process\r\n");
+						}
+						else if (dwIntegrityLevel >= SECURITY_MANDATORY_HIGH_RID)
+						{
+							// High Integrity
+							wprintf(L"Running as High Integrity Process\r\n");
+						}
+						return dwIntegrityLevel;
+					}
+					else
+					{
+						printf("GetProcessIntegrityLevel: GetTokenInformation failed\r\n");
+						ErrorPrint();
+					}
+					LocalFree(pTIL);
+				}
+			}
+		}
+		CloseHandle(hToken);
+	}
+	else
+	{
+		printf("GetProcessIntegrityLevel: OpenProcessToken failed\r\n");
+		ErrorPrint();
+	}
+	return -1;
 }
 
