@@ -13,12 +13,12 @@
 
 void ShowUsage()
 {	
-	printf("INTERNETGETCOOKIE  version 1.5\r\n");
+	printf("INTERNETGETCOOKIE  version 1.6\r\n");
 	printf("\r\n");
-	printf("pierrelc@microsoft.com September 2020\r\n");
+	printf("pierrelc@microsoft.com January 2021\r\n");
 	printf("Usage: INTERNETGETCOOKIE accepts an URL as parameter and optionaly a cookie name.\r\n");
 	printf("internetgetcookie url [cookiename]\r\n");
-	printf("When cookiename is used, gives the option to delete the cookie (set expiration date in the past)\r\n");
+	printf("When cookiename is used, gives the option to delete the cookie (sets expiration date in the past)\r\n");
 	printf("See https://docs.microsoft.com/en-us/windows/win32/wininet/managing-cookies\r\n");
 	printf("and https://docs.microsoft.com/en-us/windows/win32/api/wininet/nf-wininet-internetgetcookieexa");
 }
@@ -90,68 +90,7 @@ int main(int argc, char* argv[])
 		WCHAR szDecodedUrl[INTERNET_MAX_URL_LENGTH]=L"";
 		DWORD cchDecodedUrl = INTERNET_MAX_URL_LENGTH;
 		WCHAR szOut[INTERNET_MAX_URL_LENGTH]=L"";
-
-		wprintf(L"Calling CoInternetParseUrl  with PARSE_UNESCAPE for url : %s\r\n", wszUrl);
-		HRESULT hr = CoInternetParseUrl(wszUrl, PARSE_CANONICALIZE, PARSE_UNESCAPE, szDecodedUrl,
-			INTERNET_MAX_URL_LENGTH, &cchDecodedUrl, 0);
-		if (hr == S_OK)
-		{
-			printf("CANONICALIZE: %S\n", szDecodedUrl);
-			wprintf(L"Calling CoInternetParseUrl  with PARSE_SCHEMA for decoded url : %s\r\n", szDecodedUrl);
-			hr = CoInternetParseUrl(szDecodedUrl, PARSE_SCHEMA, 0, szOut,
-				INTERNET_MAX_URL_LENGTH, &cchDecodedUrl, 0);
-			if (hr == S_OK)
-				printf("SCHEME: %S\n", szOut);
-			else
-				printf("SCHEME: Error %08x\n", hr);
-
-			hr = CoInternetParseUrl(szDecodedUrl, PARSE_DOMAIN, 0, szOut,
-				INTERNET_MAX_URL_LENGTH, &cchDecodedUrl, 0);
-			wprintf(L"Calling CoInternetParseUrl  with PARSE_DOMAIN for decoded url : %s\r\n", wszUrl);
-			if (hr == S_OK)
-			{
-				printf("DOMAIN: %S\n", szOut);
-				unsigned long InternetGetCookieState = 0L;
-				wprintf(L"Calling InternetGetPerSiteCookieDecisionW for domain : %s\r\n", szOut);
-				if (InternetGetPerSiteCookieDecisionW(szOut, &InternetGetCookieState))
-				{
-					wprintf(L"InternetGetPerSiteCookieDecisionW returning cookie state : %X\r\n", InternetGetCookieState);
-					switch (InternetGetCookieState)
-					{
-					case COOKIE_STATE_UNKNOWN:
-						wprintf(L"COOKIE_STATE_UNKNOWN\r\n");
-						break;
-					case COOKIE_STATE_ACCEPT:
-						wprintf(L"COOKIE_STATE_ACCEPT\r\n");
-						break;
-					case COOKIE_STATE_PROMPT:
-						wprintf(L"COOKIE_STATE_PROMPT\r\n");
-						break;
-					case COOKIE_STATE_LEASH:
-						wprintf(L"COOKIE_STATE_LEASH\r\n");
-						break;
-					case COOKIE_STATE_DOWNGRADE:
-						wprintf(L"COOKIE_STATE_DOWNGRADE\r\n");
-						break;
-					case COOKIE_STATE_REJECT:
-						wprintf(L"COOKIE_STATE_REJECT\r\n");
-						break;
-					default:
-						wprintf(L"COOKIE_STATE_UNKNOWN\r\n");
-						break;
-					}
-				}
-				else
-				{
-					wprintf(L"InternetGetPerSiteCookieDecisionW returning false.\r\n\r\n");
-				}
-			}
-			else
-				printf("DOMAIN: Error %08x\n", hr);
-		}
-		else
-			printf("CANONICALIZE: Error %08x\n", hr);
-		
+	
 		LPTSTR lpszData = NULL;   // buffer to hold the cookie data
 		DWORD dwSize = 0;           // variable to get the buffer size needed
 		BOOL bReturn;
@@ -183,9 +122,30 @@ retry:
 					HRESULT hr = IEIsProtectedModeURL(wszUrl);
 					if (SUCCEEDED(hr))
 					{
-						printf("This is a protected mode url so the tool needs to be run from a low integrity process.\r\n");
-						//IEGetProtectedModeCookie requires a cookie name!
-						exit(1L);
+						DWORD dwFlags = 0L;
+						
+						TCHAR szActualCookie[MAX_PATH];
+						HRESULT hr = E_FAIL;
+						DWORD dwSize = MAX_PATH;
+
+						printf("This is a protected mode url so the tool needs to be run from a low or medium integrity process.\r\n");
+						//IEGetProtectedModeCookie requires a cookie name? or can only be calld from ie!, 
+						hr=IEGetProtectedModeCookie(wszUrl, NULL, szActualCookie, &dwSize,dwFlags);
+						if (SUCCEEDED(hr))
+						{
+							printf("IEGetProtectedModeCookie OK\r\n");
+							printf("Cookie Data: %S Size:%u Flags:%X\r\n", szActualCookie, dwSize, dwFlags);
+							ExtractToken(szActualCookie);
+						}
+						else
+						{
+							DWORD dwError = GetLastError();
+							printf("IEGetProtectedModeCookie KO: %X\r\n",dwError);  //getting 0x1f ERROR_GEN_FAILURE
+							if (dwError == 0x1F)
+							{
+								printf("IEGetProtectedModeCookie is failing when called from an elevated command prompt\r\n");
+							}
+						}
 					}
 					else
 					{						
@@ -206,7 +166,7 @@ retry:
 			printf("Cookie data : %S\r\n\r\n", lpszData);
 			if (lpszData)
 			{
-				ExtractToken(lpszData);
+				
 			}  
 			else
 			{
