@@ -16,7 +16,13 @@ DWORD GetProcessIntegrityLevel();
 DWORD ErrorPrint();
 void CreateLowProcess();
 WCHAR* ExtractSingleCookieToken(LPTSTR lpszData);
-UINT16 ExtractCookiesToken(LPTSTR lpszData);
+UINT16 ExtractCookiesToken(LPTSTR lpszData, BOOL bDisplay);
+void FindCookies(WCHAR* wszUrl);
+void FindCookie(WCHAR* wszUrl, WCHAR* wszCookieName);
+
+BOOL bProtectedModeUrl = FALSE;
+DWORD dwProcessIntegrityLevel = 0;
+
 
 void ShowUsage()
 {	
@@ -30,10 +36,7 @@ void ShowUsage()
 	printf("and https://docs.microsoft.com/en-us/windows/win32/api/wininet/nf-wininet-internetgetcookieexa");
 }
 
-void FindCookies(WCHAR *wszUrl);
-void FindCookie(WCHAR* wszUrl, WCHAR* wszCookieName);
-BOOL bProtectedModeUrl = FALSE;
-DWORD dwProcessIntegrityLevel = 0;
+
 
 
 int main(int argc, char* argv[])
@@ -48,32 +51,6 @@ int main(int argc, char* argv[])
 	WCHAR wszCookieName[INTERNET_MAX_URL_LENGTH] = L"";
 
 	dwProcessIntegrityLevel = GetProcessIntegrityLevel();
-
-	if (dwProcessIntegrityLevel == SECURITY_MANDATORY_HIGH_RID)
-	{
-		printf("Process running at High Integrity Level\r\n");
-	}
-	else if (dwProcessIntegrityLevel == SECURITY_MANDATORY_LOW_RID)
-	{
-		//¨process already Low 
-		printf("Process running at Low Integrity Level\r\n");
-	}
-	else if (dwProcessIntegrityLevel == SECURITY_MANDATORY_MEDIUM_RID)
-	{
-		printf("Process running at Low Integrity Level\r\n");
-	}
-	else if (dwProcessIntegrityLevel == SECURITY_MANDATORY_SYSTEM_RID)
-	{
-		printf("Process running at System Integrity Level\r\n");
-	}
-	else if (dwProcessIntegrityLevel == SECURITY_MANDATORY_UNTRUSTED_RID)
-	{
-		printf("Process running at Untrusted Integrity Level\r\n");
-	}	
-	else
-	{
-		printf("Unexpected integrity level\r\n");
-	}
 
 	MultiByteToWideChar(CP_ACP, 0, argv[1], strlen(argv[1]), wszUrl, INTERNET_MAX_URL_LENGTH);
 	wszUrl[strlen(argv[1])] = 0;
@@ -192,6 +169,46 @@ retryEx2:
 				goto retryEx2;
 			}
 
+			DWORD dwFlags = 0L;
+			WCHAR szCookieData[MAX_PATH] = L"";
+			HRESULT hr = E_FAIL;
+			DWORD dwSize = MAX_PATH;
+
+			printf("Protected mode url : calling IEGetProtectedModeCookie with dwFlags set to zero\r\n");
+			hr = IEGetProtectedModeCookie(wszUrl, wszCookieName, szCookieData, &dwSize, dwFlags);
+			if (SUCCEEDED(hr))
+			{
+				printf("IEGetProtectedModeCookie OK\r\n");
+				printf("Cookie Data: %S Size:%u Flags:%X\r\n", szCookieData, dwSize, dwFlags);
+				ExtractSingleCookieToken(szCookieData);
+			}
+			else
+			{
+				DWORD dwError = GetLastError();
+				printf("IEGetProtectedModeCookie returning error: %X\r\n", dwError);  //getting 0x1f ERROR_GEN_FAILURE
+				printf("Trying to restart the process with Low Integrity Level\r\n");
+				if (dwProcessIntegrityLevel == SECURITY_MANDATORY_HIGH_RID)
+				{
+					printf("Starting low cannot be done from an administrative command prompt (High Integrity Level)\r\n");
+					exit(-1L);
+				}
+				else if (dwProcessIntegrityLevel == SECURITY_MANDATORY_LOW_RID)
+				{
+					//¨process already Low 
+					printf("Process already running at low integrity\r\n");
+					exit(-2L);
+				}
+				else if (dwProcessIntegrityLevel == SECURITY_MANDATORY_MEDIUM_RID)
+				{
+					CreateLowProcess();
+					exit(0L);
+				}
+				else
+				{
+					printf("Unexpected integity level for -low option\r\n");
+				}
+			}
+
 		}
 		else if (dwError == ERROR_INVALID_PARAMETER)
 		{
@@ -215,6 +232,8 @@ void FindCookies(WCHAR *wszUrl)
 	LPTSTR lpszData = NULL;   // buffer to hold the cookie data
 	DWORD dwSize = 0;           // variable to get the buffer size needed
 	BOOL bReturn;
+	UINT16 nbCookies = 0;
+	UINT16 nbCookiesEx = 0;
 	// Insert code to retrieve the URL.
 
 retry:
@@ -254,7 +273,7 @@ retry:
 					{
 						printf("IEGetProtectedModeCookie OK\r\n");
 						printf("Cookie Data: %S Size:%u Flags:%X\r\n", szCookieData, dwSize, dwFlags);
-						ExtractCookiesToken(szCookieData);
+						ExtractCookiesToken(szCookieData, TRUE);
 					}
 					else
 					{
@@ -301,7 +320,7 @@ retry:
 		printf("InternetGetCookie succeeded.\r\n");
 		if (lpszData)
 		{
-			ExtractCookiesToken(lpszData);
+			nbCookies=ExtractCookiesToken(lpszData,TRUE);
 		}
 		else
 		{
@@ -360,7 +379,12 @@ retryEx:
 		printf("Cookie data : %S\r\n\r\n", lpszData);
 		if (lpszData)
 		{
-			ExtractCookiesToken(lpszData);
+			nbCookiesEx=ExtractCookiesToken(lpszData,FALSE);
+			if (nbCookiesEx > nbCookies)
+			{
+				printf("%d HttpOnly cookies found\r\n", nbCookiesEx - nbCookies);
+				ExtractCookiesToken(lpszData, TRUE);
+			}
 		}
 		else
 		{
@@ -488,18 +512,18 @@ DWORD GetProcessIntegrityLevel()
 						if (dwIntegrityLevel < SECURITY_MANDATORY_MEDIUM_RID)
 						{
 							// Low Integrity
-							wprintf(L"Running as Low Integrity Process\r\n");
+							wprintf(L"Running at Low Integrity Level\r\n");
 						}
 						else if (dwIntegrityLevel >= SECURITY_MANDATORY_MEDIUM_RID &&
 							dwIntegrityLevel < SECURITY_MANDATORY_HIGH_RID)
 						{
 							// Medium Integrity
-							wprintf(L"Running as Medium Integrity Process\r\n");
+							wprintf(L"Running at Medium Integrity Level\r\n");
 						}
 						else if (dwIntegrityLevel >= SECURITY_MANDATORY_HIGH_RID)
 						{
 							// High Integrity
-							wprintf(L"Running as High Integrity Process\r\n");
+							wprintf(L"Running at High Integrity Level\r\n");
 						}
 						return dwIntegrityLevel;
 					}
@@ -569,7 +593,7 @@ WCHAR* ExtractSingleCookieToken(LPTSTR lpszData)
 	return CookieName;
 }
 
-UINT16 ExtractCookiesToken(LPTSTR lpszData)
+UINT16 ExtractCookiesToken(LPTSTR lpszData, BOOL bDisplay)
 {
 	// Code to display the cookie data.
 	//+		lpszData	0x010dee48 L"WebLanguagePreference=fr-fr; WT_NVR=0=/:1=web; SRCHUID=V=2&GUID=9087E76D5D4343F5BFE07F75D80435E4&dmnchg=1; SRCHD=AF=NOFORM; WT_FPC=id=2186e6812f80d94b48a1502956146257:lv=1502956146257:ss=1502956146257...	wchar_t *
@@ -581,8 +605,11 @@ UINT16 ExtractCookiesToken(LPTSTR lpszData)
 	WCHAR* CookieName = NULL;
 	UINT16 CookieNumber = 0;
 
-	//get the first token:
-	token = wcstok_s(lpszData, seps, &next_token);
+	//get the first token
+	//Each call modifies str by substituting a null character for the first delimiter that occurs after the returned token.
+	WCHAR* lpszDataCopy = new WCHAR[wcslen(lpszData) + 1];
+	wcscpy_s(lpszDataCopy, wcslen(lpszData) + 1, lpszData);
+	token = wcstok_s(lpszDataCopy, seps, &next_token);
 
 	// While there are token
 	while (token != NULL)
@@ -606,15 +633,21 @@ UINT16 ExtractCookiesToken(LPTSTR lpszData)
 						CookieName += 1;
 					}
 					WCHAR* CookieValue = token + i + 1;
-					wprintf(L"Cookie %d Name  = %s\r\n", CookieNumber, CookieName);
-					wprintf(L"\tValue = %s\r\n", CookieValue);
+					if (bDisplay)
+					{
+						wprintf(L"Cookie %d Name  = %s\r\n", CookieNumber, CookieName);
+						wprintf(L"\tValue = %s\r\n", CookieValue);
+					}
 					break;
 				}
 			}
 			token = wcstok_s(NULL, seps, &next_token);
 		}
 	}
-	printf("Total number of cookies : %d\r\n", CookieNumber);
+	if (bDisplay)
+	{
+		printf("Total number of cookies : %d\r\n", CookieNumber);
+	}
 	//necessary for single cookie case
 	return CookieNumber;
 }
