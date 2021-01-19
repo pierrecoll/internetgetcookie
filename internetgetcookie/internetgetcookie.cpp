@@ -19,6 +19,7 @@ WCHAR* ExtractSingleCookieToken(LPTSTR lpszData);
 UINT16 ExtractCookiesToken(LPTSTR lpszData, BOOL bDisplay);
 void FindCookies(WCHAR* wszUrl);
 void FindCookie(WCHAR* wszUrl, WCHAR* wszCookieName);
+void DeleteCookie(WCHAR* wszUrl, WCHAR* wszCookieName);
 
 BOOL bProtectedModeUrl = FALSE;
 DWORD dwProcessIntegrityLevel = 0;
@@ -96,43 +97,8 @@ retryEx2:
 		if (lpszCookieData)
 		{
 			wprintf(L"Cookie data : %s.\r\n", lpszCookieData);
-			ExtractSingleCookieToken(lpszCookieData);
-			printf("Type y if you want to delete the cookie or any other character to exit..........\r\n");
-			printf("\r\n");
-			char c;
-			c = (char)getchar();
-			if ((c == 'y') || (c == 'Y'))
-			{
-				getchar();  //to get cr
-				printf("Deleting (calling InternetSetCookie with expiration date set to Sat,01-Jan-2000 00:00:00 GMT) for cookie:\r\n");
-				WCHAR* CookieName = ExtractSingleCookieToken(lpszCookieData);
-				//cookie value does not matter
-				bReturn = InternetSetCookie(wszUrl, CookieName,
-					TEXT(";expires=Sat,01-Jan-2000 00:00:00 GMT"));
-				if (bReturn == FALSE)
-				{
-					DWORD dwError = GetLastError();
-					wprintf(L"InternetSetCookie failed with error : %d %X\r\n", dwError, dwError);
-					if (dwError == ERROR_INVALID_OPERATION)
-					{
-						wprintf(L"ERROR_INVALID_OPERATION -> Calling InternetSetCookieEx with flag INTERNET_COOKIE_NON_SCRIPT\r\n");
-						bReturn = InternetSetCookieEx(wszUrl, CookieName,
-							TEXT(";expires=Sat,01-Jan-2000 00:00:00 GMT"), INTERNET_COOKIE_NON_SCRIPT, 0);
-						if (bReturn == FALSE)
-						{
-							wprintf(L"InternetSetCookieEx failed with error : %d %X.\r\n", dwError, dwError);
-						}
-						else
-						{
-							wprintf(L"Calling InternetSetCookieEx to delete cookie %s succeeded.\r\n", CookieName);
-						}
-					}
-				}
-				else
-				{
-					wprintf(L"Calling InternetSetCookie to delete cookie %s succeeded.\r\n", CookieName);
-				}
-			}
+			WCHAR* wszCookieName = ExtractSingleCookieToken(lpszCookieData);
+			DeleteCookie(wszUrl, wszCookieName);
 		}
 		else
 		{
@@ -180,7 +146,8 @@ retryEx2:
 			{
 				printf("IEGetProtectedModeCookie OK\r\n");
 				printf("Cookie Data: %S Size:%u Flags:%X\r\n", szCookieData, dwSize, dwFlags);
-				ExtractSingleCookieToken(szCookieData);
+				WCHAR* wszCookieName= ExtractSingleCookieToken(szCookieData);
+				DeleteCookie(wszUrl, wszCookieName);
 			}
 			else
 			{
@@ -217,6 +184,46 @@ retryEx2:
 		else
 		{
 			wprintf(L"Unexpected error\r\n");
+		}
+	}
+}
+
+void DeleteCookie(WCHAR* wszUrl, WCHAR* wszCookieName)
+{
+	wprintf(L"Type y if you want to delete  cookie %s for url %s or any other character to exit..........\r\n",wszCookieName,wszUrl);
+	printf("\r\n");
+	char c;
+	c = (char)getchar();
+	if ((c == 'y') || (c == 'Y'))
+	{
+		BOOL bReturn = FALSE;
+		getchar();  //to get cr
+		wprintf(L"Deleting (calling InternetSetCookie with expiration date set to Sat,01-Jan-2000 00:00:00 GMT) for cookie: %s\r\n", wszCookieName);
+		//cookie value does not matter
+		bReturn = InternetSetCookie(wszUrl, wszCookieName,
+			TEXT(";expires=Sat,01-Jan-2000 00:00:00 GMT"));
+		if (bReturn == FALSE)
+		{
+			DWORD dwError = GetLastError();
+			wprintf(L"InternetSetCookie failed with error : %d %X\r\n", dwError, dwError);
+			if (dwError == ERROR_INVALID_OPERATION)
+			{
+				wprintf(L"ERROR_INVALID_OPERATION -> Calling InternetSetCookieEx with flag INTERNET_COOKIE_NON_SCRIPT\r\n");
+				bReturn = InternetSetCookieEx(wszUrl, wszCookieName,
+					TEXT(";expires=Sat,01-Jan-2000 00:00:00 GMT"), INTERNET_COOKIE_NON_SCRIPT, 0);
+				if (bReturn == FALSE)
+				{
+					wprintf(L"InternetSetCookieEx failed with error : %d %X.\r\n", dwError, dwError);
+				}
+				else
+				{
+					wprintf(L"Calling InternetSetCookieEx to delete cookie %s succeeded.\r\n", wszCookieName);
+				}
+			}
+		}
+		else
+		{
+			wprintf(L"Calling InternetSetCookie to delete cookie %s succeeded.\r\n", wszCookieName);
 		}
 	}
 }
