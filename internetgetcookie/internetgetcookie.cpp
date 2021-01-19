@@ -31,6 +31,7 @@ void ShowUsage()
 }
 
 void FindCookies(WCHAR *wszUrl);
+void FindCookie(WCHAR* wszUrl, WCHAR* wszCookieName);
 BOOL bProtectedModeUrl = FALSE;
 DWORD dwProcessIntegrityLevel = 0;
 
@@ -90,111 +91,117 @@ int main(int argc, char* argv[])
 	}
 	if (argc == 3)
 	{
-
 		MultiByteToWideChar(CP_ACP, 0, argv[2], strlen(argv[2]), wszCookieName, INTERNET_MAX_URL_LENGTH);
 		wszUrl[strlen(argv[1])] = 0;
 		wprintf(L"Cookie Name : %s.\r\n", wszCookieName);
-		BOOL bReturn;
-		DWORD dwSize = 0;
-
-		LPTSTR lpszCookieData = NULL;   // buffer to hold the cookie data
-		DWORD dwFlags = 0L;
-
-	retryEx2:
-		wprintf(L"Calling InternetGetCookieEx for url %s and cookie name %s dwFlags: %X dwSize :%d\r\n", wszUrl, wszCookieName, dwFlags, dwSize);
-		bReturn = InternetGetCookieEx(wszUrl, wszCookieName, lpszCookieData, &dwSize, dwFlags, NULL);
-		wprintf(L"InternetGetCookieEx returning %d dwSize : %d\r\n", bReturn, dwSize);
-		if (bReturn == TRUE)
-		{
-			wprintf(L"InternetGetCookieEx succeeded\r\n");
-			if (lpszCookieData)
-			{
-				wprintf(L"Cookie data : %s.\r\n", lpszCookieData);
-				ExtractSingleCookieToken(lpszCookieData);
-				printf("Type y if you want to delete the cookie or any other character to exit..........\r\n");
-				printf("\r\n");
-				char c;
-				c = (char)getchar();
-				if ((c == 'y') || (c == 'Y'))
-				{
-					getchar();  //to get cr
-					printf("Deleting (calling InternetSetCookie with expiration date set to Sat,01-Jan-2000 00:00:00 GMT) for cookie:\r\n");
-					WCHAR* CookieName = ExtractSingleCookieToken(lpszCookieData);
-					//cookie value does not matter
-					bReturn = InternetSetCookie(wszUrl, CookieName,
-						TEXT(";expires=Sat,01-Jan-2000 00:00:00 GMT"));
-					if (bReturn == FALSE)
-					{
-						DWORD dwError = GetLastError();
-						wprintf(L"InternetSetCookie failed with error : %d %X\r\n", dwError, dwError);
-						if (dwError == ERROR_INVALID_OPERATION)
-						{
-							wprintf(L"ERROR_INVALID_OPERATION -> Calling InternetSetCookieEx with flag INTERNET_COOKIE_NON_SCRIPT\r\n");
-							bReturn = InternetSetCookieEx(wszUrl, CookieName,
-								TEXT(";expires=Sat,01-Jan-2000 00:00:00 GMT"), INTERNET_COOKIE_NON_SCRIPT, 0);
-							if (bReturn == FALSE)
-							{
-								wprintf(L"InternetSetCookieEx failed with error : %d %X.\r\n", dwError, dwError);
-							}
-							else
-							{
-								wprintf(L"Calling InternetSetCookieEx to delete cookie %s succeeded.\r\n", CookieName);
-							}
-						}
-					}
-					else
-					{
-						wprintf(L"Calling InternetSetCookie to delete cookie %s succeeded.\r\n",CookieName);
-					}
-				}
-			}
-			else
-			{
-				wprintf(L"No Cookie data (If NULL is passed to lpszCookieData, the call will succeed and the function will not set ERROR_INSUFFICIENT_BUFFER)\r\n");
-				wprintf(L"Allocating %d bytes and retrying.\r\n", dwSize);
-				// Allocate the necessary buffer.
-				lpszCookieData = new TCHAR[dwSize];
-				// Try the call again.
-				goto retryEx2;
-			}
-		}
-
-		if (bReturn == FALSE)
-		{
-			DWORD dwError = GetLastError();
-			wprintf(L"InternetGetCookieEx failed with error : %d %X\r\n", dwError, dwError);
-
-			// Check for an insufficient buffer error.
-			if (dwError == ERROR_INSUFFICIENT_BUFFER)
-			{
-				wprintf(L"ERROR_INSUFFICIENT_BUFFER: allocating %d bytes and retrying\r\n", dwSize);
-				// Allocate the necessary buffer.
-				lpszCookieData = new TCHAR[dwSize];
-				// Try the call again.
-				goto retryEx2;
-			}
-			else if (dwError == ERROR_NO_MORE_ITEMS)
-			{
-				wprintf(L"ERROR_NO_MORE_ITEMS: No cookied data as specified could be retrieved\r\n");
-				if (dwFlags == 0L)
-				{
-					wprintf(L"Re-trying with INTERNET_COOKIE_HTTPONLY flag\r\n");
-					dwFlags = INTERNET_COOKIE_HTTPONLY;
-					goto retryEx2;
-				}
-			}
-			else if (dwError == ERROR_INVALID_PARAMETER)
-			{
-				wprintf(L"ERROR_INVALID_PARAMETER: either the pchURL or the pcchCookieData parameter is NULL.\r\n");
-			}
-			else
-			{
-				wprintf(L"Unexpected error\r\n");
-			}
-		}
+		FindCookie(wszUrl, wszCookieName);
 	}
 
 	return 0L;
+}
+
+void FindCookie(WCHAR* wszUrl, WCHAR* wszCookieName)
+{
+
+	BOOL bReturn;
+	DWORD dwSize = 0;
+
+	LPTSTR lpszCookieData = NULL;   // buffer to hold the cookie data
+	DWORD dwFlags = 0L;
+
+retryEx2:
+	wprintf(L"Calling InternetGetCookieEx for url %s and cookie name %s dwFlags: %X dwSize :%d\r\n", wszUrl, wszCookieName, dwFlags, dwSize);
+	bReturn = InternetGetCookieEx(wszUrl, wszCookieName, lpszCookieData, &dwSize, dwFlags, NULL);
+	wprintf(L"InternetGetCookieEx returning %d dwSize : %d\r\n", bReturn, dwSize);
+	if (bReturn == TRUE)
+	{
+		wprintf(L"InternetGetCookieEx succeeded\r\n");
+		if (lpszCookieData)
+		{
+			wprintf(L"Cookie data : %s.\r\n", lpszCookieData);
+			ExtractSingleCookieToken(lpszCookieData);
+			printf("Type y if you want to delete the cookie or any other character to exit..........\r\n");
+			printf("\r\n");
+			char c;
+			c = (char)getchar();
+			if ((c == 'y') || (c == 'Y'))
+			{
+				getchar();  //to get cr
+				printf("Deleting (calling InternetSetCookie with expiration date set to Sat,01-Jan-2000 00:00:00 GMT) for cookie:\r\n");
+				WCHAR* CookieName = ExtractSingleCookieToken(lpszCookieData);
+				//cookie value does not matter
+				bReturn = InternetSetCookie(wszUrl, CookieName,
+					TEXT(";expires=Sat,01-Jan-2000 00:00:00 GMT"));
+				if (bReturn == FALSE)
+				{
+					DWORD dwError = GetLastError();
+					wprintf(L"InternetSetCookie failed with error : %d %X\r\n", dwError, dwError);
+					if (dwError == ERROR_INVALID_OPERATION)
+					{
+						wprintf(L"ERROR_INVALID_OPERATION -> Calling InternetSetCookieEx with flag INTERNET_COOKIE_NON_SCRIPT\r\n");
+						bReturn = InternetSetCookieEx(wszUrl, CookieName,
+							TEXT(";expires=Sat,01-Jan-2000 00:00:00 GMT"), INTERNET_COOKIE_NON_SCRIPT, 0);
+						if (bReturn == FALSE)
+						{
+							wprintf(L"InternetSetCookieEx failed with error : %d %X.\r\n", dwError, dwError);
+						}
+						else
+						{
+							wprintf(L"Calling InternetSetCookieEx to delete cookie %s succeeded.\r\n", CookieName);
+						}
+					}
+				}
+				else
+				{
+					wprintf(L"Calling InternetSetCookie to delete cookie %s succeeded.\r\n", CookieName);
+				}
+			}
+		}
+		else
+		{
+			wprintf(L"No Cookie data (If NULL is passed to lpszCookieData, the call will succeed and the function will not set ERROR_INSUFFICIENT_BUFFER)\r\n");
+			wprintf(L"Allocating %d bytes and retrying.\r\n", dwSize);
+			// Allocate the necessary buffer.
+			lpszCookieData = new TCHAR[dwSize];
+			// Try the call again.
+			goto retryEx2;
+		}
+	}
+
+	if (bReturn == FALSE)
+	{
+		DWORD dwError = GetLastError();
+		wprintf(L"InternetGetCookieEx failed with error : %d %X\r\n", dwError, dwError);
+
+		// Check for an insufficient buffer error.
+		if (dwError == ERROR_INSUFFICIENT_BUFFER)
+		{
+			wprintf(L"ERROR_INSUFFICIENT_BUFFER: allocating %d bytes and retrying\r\n", dwSize);
+			// Allocate the necessary buffer.
+			lpszCookieData = new TCHAR[dwSize];
+			// Try the call again.
+			goto retryEx2;
+		}
+		else if (dwError == ERROR_NO_MORE_ITEMS)
+		{
+			wprintf(L"ERROR_NO_MORE_ITEMS: No cookied data as specified could be retrieved\r\n");
+			if (dwFlags == 0L)
+			{
+				wprintf(L"Re-trying with INTERNET_COOKIE_HTTPONLY flag\r\n");
+				dwFlags = INTERNET_COOKIE_HTTPONLY;
+				goto retryEx2;
+			}
+
+		}
+		else if (dwError == ERROR_INVALID_PARAMETER)
+		{
+			wprintf(L"ERROR_INVALID_PARAMETER: either the pchURL or the pcchCookieData parameter is NULL.\r\n");
+		}
+		else
+		{
+			wprintf(L"Unexpected error\r\n");
+		}
+	}
 }
 
 void FindCookies(WCHAR *wszUrl)
@@ -234,8 +241,6 @@ retry:
 			// Error handling code.			
 			if (dwError == ERROR_NO_MORE_ITEMS)
 			{
-				wprintf(L"ERROR_NO_MORE_ITEMS: Calling IEIsProtectedModeURL\r\n");
-				HRESULT hr = IEIsProtectedModeURL(wszUrl);
 				if (bProtectedModeUrl == TRUE)
 				{
 					DWORD dwFlags = 0L;
@@ -243,9 +248,7 @@ retry:
 					HRESULT hr = E_FAIL;
 					DWORD dwSize = MAX_PATH;
 
-					//IEGetProtectedModeCookie requires a cookie name? or can only be calld from ie!, 
-
-					printf("Calling IEGetProtectedModeCookie with dwFlags set to zero\r\n");
+					printf("Protected mode url : calling IEGetProtectedModeCookie with dwFlags set to zero\r\n");
 					hr = IEGetProtectedModeCookie(wszUrl, NULL, szCookieData, &dwSize, dwFlags);
 					if (SUCCEEDED(hr))
 					{
