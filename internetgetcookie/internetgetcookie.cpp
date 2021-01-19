@@ -38,6 +38,7 @@ WCHAR* ExtractToken(LPTSTR lpszData)
 	WCHAR* token = NULL;
 	WCHAR* next_token = NULL;
 	WCHAR* CookieName = NULL;
+	UINT16 CookieNumber = 0;
 
 	//get the first token:
 	token = wcstok_s(lpszData, seps, &next_token);
@@ -49,6 +50,7 @@ WCHAR* ExtractToken(LPTSTR lpszData)
 		if (token != NULL)
 		{
 			//wprintf(L" %s\n", token);
+			CookieNumber++;
 			unsigned int CookieLen = wcslen(token);
 			unsigned int i;
 			for (i = 0; i < CookieLen; i++)
@@ -63,8 +65,8 @@ WCHAR* ExtractToken(LPTSTR lpszData)
 						CookieName += 1;
 					}
 					WCHAR* CookieValue = token + i + 1;
-					wprintf(L"Cookie Name  = %s\r\n", CookieName);
-					wprintf(L"Cookie Value = %s\r\n", CookieValue);
+					wprintf(L"Cookie %d Name  = %s\r\n", CookieNumber, CookieName);
+					wprintf(L"\tValue = %s\r\n", CookieValue);
 					break;
 				}
 			}
@@ -76,6 +78,7 @@ WCHAR* ExtractToken(LPTSTR lpszData)
 
 
 void FindCookies(WCHAR *wszUrl, WCHAR *wszCookieName);
+BOOL bProtectedModeUrl = FALSE;
 
 int main(int argc, char* argv[])
 {
@@ -88,13 +91,47 @@ int main(int argc, char* argv[])
 	WCHAR wszUrl[INTERNET_MAX_URL_LENGTH] = L"";
 	WCHAR wszCookieName[INTERNET_MAX_URL_LENGTH] = L"";
 
+	DWORD dwProcessIntegrityLevel;
+	dwProcessIntegrityLevel = GetProcessIntegrityLevel();
+
+	if (dwProcessIntegrityLevel == SECURITY_MANDATORY_HIGH_RID)
+	{
+		printf("Process running at High Integrity Level\r\n");
+	}
+	else if (dwProcessIntegrityLevel == SECURITY_MANDATORY_LOW_RID)
+	{
+		//¨process already Low 
+		printf("Process running at Low Integrity Level\r\n");
+	}
+	else if (dwProcessIntegrityLevel == SECURITY_MANDATORY_MEDIUM_RID)
+	{
+		printf("Process running at Low Integrity Level\r\n");
+	}
+	else if (dwProcessIntegrityLevel == SECURITY_MANDATORY_SYSTEM_RID)
+	{
+		printf("Process running at System Integrity Level\r\n");
+	}
+	else if (dwProcessIntegrityLevel == SECURITY_MANDATORY_UNTRUSTED_RID)
+	{
+		printf("Process running at Untrusted Integrity Level\r\n");
+	}	
+	else
+	{
+		printf("Unexpected integrity level\r\n");
+	}
 
 	MultiByteToWideChar(CP_ACP, 0, argv[1], strlen(argv[1]), wszUrl, INTERNET_MAX_URL_LENGTH);
 	wszUrl[strlen(argv[1])] = 0;
 	wprintf(L"Url : %s\r\n", wszUrl);
+	HRESULT hr = IEIsProtectedModeURL(wszUrl);
+	if (SUCCEEDED(hr))
+	{
+		bProtectedModeUrl = TRUE;
+		printf("This is a protected mode url so the tool should be run from a low or medium integrity process.\r\n");
+	}
 	if (argc == 2)
 	{
-		FindCookies(wszUrl, NULL);
+		//FindCookies(wszUrl, NULL);
 	}
 
 	if (argc == 2)
@@ -136,35 +173,28 @@ retry:
 				{
 					wprintf(L"ERROR_NO_MORE_ITEMS: Calling IEIsProtectedModeURL\r\n");
 					HRESULT hr = IEIsProtectedModeURL(wszUrl);
-					if (SUCCEEDED(hr))
-					{
-						printf("This is a protected mode url so the tool needs to be run from a low or medium integrity process.\r\n");
-						
+					if (bProtectedModeUrl == TRUE)
+					{						
 						DWORD dwFlags = 0L;						
-						WCHAR szActualCookie[MAX_PATH]=L"";
+						WCHAR szCookieData[MAX_PATH]=L"";
 						HRESULT hr = E_FAIL;
 						DWORD dwSize = MAX_PATH;
 						
 						//IEGetProtectedModeCookie requires a cookie name? or can only be calld from ie!, 
-						DWORD dwProcessIntegrityLevel;
-						dwProcessIntegrityLevel = GetProcessIntegrityLevel();
 
 						printf("Calling IEGetProtectedModeCookie with dwFlags set to zero\r\n");
-						hr=IEGetProtectedModeCookie(wszUrl, NULL, szActualCookie, &dwSize,dwFlags);
+						hr=IEGetProtectedModeCookie(wszUrl, NULL, szCookieData, &dwSize,dwFlags);
 						if (SUCCEEDED(hr))
 						{
 							printf("IEGetProtectedModeCookie OK\r\n");
-							printf("Cookie Data: %S Size:%u Flags:%X\r\n", szActualCookie, dwSize, dwFlags);
-							ExtractToken(szActualCookie);
+							printf("Cookie Data: %S Size:%u Flags:%X\r\n", szCookieData, dwSize, dwFlags);
+							ExtractToken(szCookieData);
 						}
 						else
 						{
 							DWORD dwError = GetLastError();
-							printf("IEGetProtectedModeCookie KO: %X\r\n",dwError);  //getting 0x1f ERROR_GEN_FAILURE
-							if (dwError == 0x1F)
-							{
-								printf("IEGetProtectedModeCookie may fail when called from an elevated command prompt\r\n");
-							}
+							printf("IEGetProtectedModeCookie returning error: %X\r\n",dwError);  //getting 0x1f ERROR_GEN_FAILURE
+							printf("Trying to restart the process with Low Integrity Level\r\n");
 							if (dwProcessIntegrityLevel == SECURITY_MANDATORY_HIGH_RID)
 							{
 								printf("Starting low cannot be done from an administrative command prompt (High Integrity Level)\r\n");
@@ -174,6 +204,7 @@ retry:
 							{
 								//¨process already Low 
 								printf("Process already running at low integrity\r\n");
+								exit(-2L);
 							}
 							else if (dwProcessIntegrityLevel == SECURITY_MANDATORY_MEDIUM_RID)
 							{
@@ -188,7 +219,7 @@ retry:
 					}
 					else
 					{						
-						printf("There is no cookie for the specified URL and all its parents.\r\n");
+						printf("No cookie found for the specified URL\r\n");
 						exit(1L);
 					}
 				}
@@ -202,13 +233,13 @@ retry:
 		else
 		{
 			printf("InternetGetCookie succeeded.\r\n");
-			printf("Cookie data : %S\r\n\r\n", lpszData);
 			if (lpszData)
 			{
-				
+				ExtractToken(lpszData);
 			}  
 			else
 			{
+				wprintf(L"No Cookie data: Allocating %d bytes and retrying.\r\n", dwSize);
 				// Allocate the necessary buffer.
 				lpszData = new TCHAR[dwSize];
 				// Try the call again.
@@ -219,6 +250,7 @@ retry:
 			delete[]lpszData;
 		}
 
+		printf("Searching for cookies with HttpOnly flag\r\n");
 		lpszData = NULL;   // buffer to hold the cookie data
 		dwSize = 0;           // variable to get the buffer size needed
 		DWORD dwFlags = INTERNET_COOKIE_NON_SCRIPT;
