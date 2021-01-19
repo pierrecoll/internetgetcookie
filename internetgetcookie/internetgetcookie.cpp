@@ -74,8 +74,8 @@ WCHAR* ExtractToken(LPTSTR lpszData)
 	return CookieName;
 }
 
-WCHAR wszUrl[INTERNET_MAX_URL_LENGTH] = L"";
-WCHAR wszCookieName[INTERNET_MAX_URL_LENGTH] = L"";
+
+void FindCookies(WCHAR *wszUrl, WCHAR *wszCookieName);
 
 int main(int argc, char* argv[])
 {
@@ -85,12 +85,21 @@ int main(int argc, char* argv[])
 		exit(0L);
 	}
 
+	WCHAR wszUrl[INTERNET_MAX_URL_LENGTH] = L"";
+	WCHAR wszCookieName[INTERNET_MAX_URL_LENGTH] = L"";
+
+
 	MultiByteToWideChar(CP_ACP, 0, argv[1], strlen(argv[1]), wszUrl, INTERNET_MAX_URL_LENGTH);
 	wszUrl[strlen(argv[1])] = 0;
 	wprintf(L"Url : %s\r\n", wszUrl);
+	if (argc == 2)
+	{
+		FindCookies(wszUrl, NULL);
+	}
 
 	if (argc == 2)
 	{
+		printf("No cookie name\r\n");
 
 		WCHAR szDecodedUrl[INTERNET_MAX_URL_LENGTH]=L"";
 		DWORD cchDecodedUrl = INTERNET_MAX_URL_LENGTH;
@@ -104,18 +113,19 @@ int main(int argc, char* argv[])
 retry:
 		// The first call to InternetGetCookie will get the required
 		// buffer size needed to download the cookie data.
-		wprintf(L"Calling InternetGetCookie for url %s\r\n", wszUrl);
+		wprintf(L"Calling InternetGetCookie for url %s with dwSize: %d\r\n", wszUrl,dwSize);
 		bReturn = InternetGetCookie(wszUrl, NULL, lpszData, &dwSize);
 		wprintf(L"InternetGetCookie returning %d dwSize = %d\r\n", bReturn, dwSize);
 		if (bReturn == FALSE)
 		{
 			DWORD dwError = GetLastError();
+			wprintf(L"InternetGetCookie returning FALSE dwSize = %d error: %X\r\n", dwSize,dwError);
 			// Check for an insufficient buffer error.
 			if (dwError == ERROR_INSUFFICIENT_BUFFER)
 			{
 				// Allocate the necessary buffer.
 				lpszData = new TCHAR[dwSize];
-				wprintf(L"Allocating %d bytes and retrying.\r\n", dwSize);
+				wprintf(L"ERROR_INSUFFICIENT_BUFFER: Allocating %d bytes and retrying.\r\n", dwSize);
 				// Try the call again.
 				goto retry;
 			}
@@ -124,21 +134,22 @@ retry:
 				// Error handling code.			
 				if (dwError == ERROR_NO_MORE_ITEMS)
 				{
+					wprintf(L"ERROR_NO_MORE_ITEMS: Calling IEIsProtectedModeURL\r\n");
 					HRESULT hr = IEIsProtectedModeURL(wszUrl);
 					if (SUCCEEDED(hr))
 					{
-						DWORD dwFlags = 0L;
+						printf("This is a protected mode url so the tool needs to be run from a low or medium integrity process.\r\n");
 						
-						TCHAR szActualCookie[MAX_PATH];
+						DWORD dwFlags = 0L;						
+						WCHAR szActualCookie[MAX_PATH]=L"";
 						HRESULT hr = E_FAIL;
 						DWORD dwSize = MAX_PATH;
-
-						printf("This is a protected mode url so the tool needs to be run from a low or medium integrity process.\r\n");
+						
 						//IEGetProtectedModeCookie requires a cookie name? or can only be calld from ie!, 
-
 						DWORD dwProcessIntegrityLevel;
 						dwProcessIntegrityLevel = GetProcessIntegrityLevel();
 
+						printf("Calling IEGetProtectedModeCookie with dwFlags set to zero\r\n");
 						hr=IEGetProtectedModeCookie(wszUrl, NULL, szActualCookie, &dwSize,dwFlags);
 						if (SUCCEEDED(hr))
 						{
@@ -257,6 +268,7 @@ retry:
 			{
 				// Allocate the necessary buffer.
 				lpszData = new TCHAR[dwSize];
+				wprintf(L"Allocating %d bytes and retrying.\r\n", dwSize);
 				// Try the call again.
 				goto retryEx;
 			}
@@ -373,6 +385,10 @@ retry:
 	return 0L;
 }
 
+void FindCookies(WCHAR *wszUrl, WCHAR *wszCookieName)
+{
+
+}
 
 //From https://msdn.microsoft.com/en-us/library/bb250462(VS.85).aspx(d=robot)
 void CreateLowProcess()
