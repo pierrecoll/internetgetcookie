@@ -19,7 +19,7 @@ WCHAR* ExtractSingleCookieToken(LPTSTR lpszData);
 UINT16 ExtractCookiesToken(LPTSTR lpszData, BOOL bDisplay);
 void FindCookies(WCHAR* wszUrl);
 void FindCookie(WCHAR* wszUrl, WCHAR* wszCookieName);
-void DeleteCookie(WCHAR* wszUrl, WCHAR* wszCookieName);
+BOOL DeleteCookie(WCHAR* wszUrl, WCHAR* wszCookieName);
 
 BOOL bProtectedModeUrl = FALSE;
 DWORD dwProcessIntegrityLevel = 0;
@@ -60,7 +60,7 @@ int main(int argc, char* argv[])
 	if (SUCCEEDED(hr))
 	{
 		bProtectedModeUrl = TRUE;
-		printf("This is a protected mode url so the tool should be run from a low or medium integrity process.\r\n");
+		printf("This is a protected mode url.\r\n");
 	}
 
 	if (argc == 2)
@@ -175,7 +175,6 @@ retryEx2:
 					printf("Unexpected integity level for -low option\r\n");
 				}
 			}
-
 		}
 		else if (dwError == ERROR_INVALID_PARAMETER)
 		{
@@ -188,7 +187,7 @@ retryEx2:
 	}
 }
 
-void DeleteCookie(WCHAR* wszUrl, WCHAR* wszCookieName)
+BOOL DeleteCookie(WCHAR* wszUrl, WCHAR* wszCookieName)
 {
 	wprintf(L"Type y if you want to delete  cookie %s for url %s or any other character to exit..........\r\n",wszCookieName,wszUrl);
 	printf("\r\n");
@@ -196,12 +195,13 @@ void DeleteCookie(WCHAR* wszUrl, WCHAR* wszCookieName)
 	c = (char)getchar();
 	if ((c == 'y') || (c == 'Y'))
 	{
-		BOOL bReturn = FALSE;
+
 		getchar();  //to get cr
-		wprintf(L"Deleting (calling InternetSetCookie with expiration date set to Sat,01-Jan-2000 00:00:00 GMT) for cookie: %s\r\n", wszCookieName);
+
 		//cookie value does not matter
-		bReturn = InternetSetCookie(wszUrl, wszCookieName,
-			TEXT(";expires=Sat,01-Jan-2000 00:00:00 GMT"));
+		BOOL bReturn = FALSE;
+		wprintf(L"Deleting  cookie %s by calling InternetSetCookie with expiration date set to Sat,01-Jan-2000 00:00:00 GMT\r\n", wszCookieName);
+		bReturn = InternetSetCookieW(wszUrl, wszCookieName, TEXT("Deleted;expires=Sat,01-Jan-2000 00:00:00 GMT"));
 		if (bReturn == FALSE)
 		{
 			DWORD dwError = GetLastError();
@@ -210,22 +210,55 @@ void DeleteCookie(WCHAR* wszUrl, WCHAR* wszCookieName)
 			{
 				wprintf(L"ERROR_INVALID_OPERATION -> Calling InternetSetCookieEx with flag INTERNET_COOKIE_NON_SCRIPT\r\n");
 				bReturn = InternetSetCookieEx(wszUrl, wszCookieName,
-					TEXT(";expires=Sat,01-Jan-2000 00:00:00 GMT"), INTERNET_COOKIE_NON_SCRIPT, 0);
+					TEXT("Deleted;expires=Sat,01-Jan-2000 00:00:00 GMT"), INTERNET_COOKIE_NON_SCRIPT, 0);
 				if (bReturn == FALSE)
 				{
+					dwError = GetLastError();
 					wprintf(L"InternetSetCookieEx failed with error : %d %X.\r\n", dwError, dwError);
 				}
 				else
 				{
 					wprintf(L"Calling InternetSetCookieEx to delete cookie %s succeeded.\r\n", wszCookieName);
+					return TRUE;
 				}
 			}
 		}
 		else
 		{
 			wprintf(L"Calling InternetSetCookie to delete cookie %s succeeded.\r\n", wszCookieName);
+			return TRUE;
+		}
+
+		if (bProtectedModeUrl)
+		{
+			HRESULT hr = S_FALSE;
+			wprintf(L"Deleting cookie %s by calling IESetProtectedModeCookie with expiration date set to Sat,01-Jan-2000 00:00:00 GMT\r\n", wszCookieName);
+			hr = IESetProtectedModeCookie(wszUrl, wszCookieName, TEXT("Deleted;expires=Sat,01-Jan-2000 00:00:00 GMT"),0L);
+			if (FAILED(hr))
+			{
+				wprintf(L"IESetProtectedModeCookie failed with error : %X\r\n", hr);
+				wprintf(L"Calling IESetProtectedModeCookie with flag INTERNET_COOKIE_NON_SCRIPT\r\n");
+				hr = IESetProtectedModeCookie(wszUrl, wszCookieName,
+					TEXT("Deleted;expires=Sat,01-Jan-2000 00:00:00 GMT"), INTERNET_COOKIE_NON_SCRIPT);
+				if (FAILED(hr))
+				{
+					wprintf(L"IESetProtectedModeCookie failed with error : %X.\r\n", hr);
+					return FALSE;
+				}
+				else
+				{
+					wprintf(L"Calling IESetProtectedModeCookie to delete cookie %s succeeded.\r\n", wszCookieName);
+					return TRUE;
+				}				
+			}
+			else
+			{
+				wprintf(L"Calling IESetProtectedModeCookie to delete cookie %s succeeded.\r\n", wszCookieName);
+				return TRUE;
+			}
 		}
 	}
+	return FALSE;
 }
 
 void FindCookies(WCHAR *wszUrl)
@@ -267,6 +300,7 @@ retry:
 			// Error handling code.			
 			if (dwError == ERROR_NO_MORE_ITEMS)
 			{
+				printf("InternetGetCookie returning ERROR_NO_MORE_ITEMS\r\n");
 				if (bProtectedModeUrl == TRUE)
 				{
 					DWORD dwFlags = 0L;
@@ -280,7 +314,7 @@ retry:
 					{
 						printf("IEGetProtectedModeCookie OK\r\n");
 						printf("Cookie Data: %S Size:%u Flags:%X\r\n", szCookieData, dwSize, dwFlags);
-						ExtractCookiesToken(szCookieData, TRUE);
+						nbCookies = ExtractCookiesToken(szCookieData, TRUE);
 					}
 					else
 					{
@@ -327,7 +361,7 @@ retry:
 		printf("InternetGetCookie succeeded.\r\n");
 		if (lpszData)
 		{
-			nbCookies=ExtractCookiesToken(lpszData,TRUE);
+			nbCookies = ExtractCookiesToken(lpszData,TRUE);
 		}
 		else
 		{
@@ -383,7 +417,6 @@ retryEx:
 	else
 	{
 		printf("InternetGetCookieEx succeeded.\r\n");
-		printf("Cookie data : %S\r\n\r\n", lpszData);
 		if (lpszData)
 		{
 			nbCookiesEx=ExtractCookiesToken(lpszData,FALSE);
@@ -391,6 +424,10 @@ retryEx:
 			{
 				printf("%d HttpOnly cookies found\r\n", nbCookiesEx - nbCookies);
 				ExtractCookiesToken(lpszData, TRUE);
+			}
+			else
+			{
+				printf("No HttpOnly cookies found\r\n");
 			}
 		}
 		else
