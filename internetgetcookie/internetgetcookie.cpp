@@ -7,6 +7,7 @@
 #include <WinInet.h>
 #include <iepmapi.h>
 #include <sddl.h>
+#include "time.h"
 
 #pragma comment(lib,"wininet.lib")
 #pragma comment(lib,"urlmon.lib")
@@ -20,10 +21,10 @@ UINT16 ExtractCookiesToken(LPTSTR lpszData, BOOL bDisplay);
 void FindCookies(WCHAR* wszUrl);
 void FindCookie(WCHAR* wszUrl, WCHAR* wszCookieName);
 BOOL DeleteCookie(WCHAR* wszUrl, WCHAR* wszCookieName);
+void DumpCookie(WCHAR* wszUrl, WCHAR* wszCookieName);
 
 BOOL bProtectedModeUrl = FALSE;
 DWORD dwProcessIntegrityLevel = 0;
-
 
 void ShowUsage()
 {	
@@ -36,9 +37,6 @@ void ShowUsage()
 	printf("See https://docs.microsoft.com/en-us/windows/win32/wininet/managing-cookies\r\n");
 	printf("and https://docs.microsoft.com/en-us/windows/win32/api/wininet/nf-wininet-internetgetcookieexa");
 }
-
-
-
 
 int main(int argc, char* argv[])
 {
@@ -78,6 +76,95 @@ int main(int argc, char* argv[])
 	return 0L;
 }
 
+void print_time(void)
+{
+	struct tm newtime;
+	char am_pm[] = "AM";
+	__time64_t long_time;
+	char timebuf[26];
+	errno_t err;
+
+	// Get time as 64-bit integer.
+	_time64(&long_time);
+	// Convert to local time.
+	err = _localtime64_s(&newtime, &long_time);
+	if (err)
+	{
+		printf("Invalid argument to _localtime64_s.");
+		exit(1);
+	}
+	if (newtime.tm_hour > 12)        // Set up extension. 
+		strcpy_s(am_pm, sizeof(am_pm), "PM");
+	if (newtime.tm_hour > 12)        // Convert from 24-hour 
+		newtime.tm_hour -= 12;    // to 12-hour clock. 
+	if (newtime.tm_hour == 0)        // Set hour to 12 if midnight.
+		newtime.tm_hour = 12;
+
+	// Convert to an ASCII representation. 
+	err = asctime_s(timebuf, 26, &newtime);
+	if (err)
+	{
+		printf("Invalid argument to asctime_s.");
+		exit(1);
+	}
+	printf("\n(%.19s %s)\n", timebuf, am_pm);
+}
+
+void DumpCookie(WCHAR* wszUrl, WCHAR* wszCookieName)
+{
+	DWORD dwReturn = 0;
+
+	LPTSTR lpszCookieData = NULL;   // buffer to hold the cookie data
+	DWORD dwFlags = 0L;
+	DWORD dwCookieCount = 0;
+	INTERNET_COOKIE2 *pInternetCookie;
+
+	wprintf(L"Calling InternetGetCookieEx2 for url %s and cookie name %s dwFlags: %X\r\n", wszUrl, wszCookieName, dwFlags);
+	dwReturn = InternetGetCookieEx2(wszUrl, wszCookieName, dwFlags, &pInternetCookie, &dwCookieCount);
+	wprintf(L"InternetGetCookieEx returning %d Cookie Count : %d\r\n", dwReturn, dwCookieCount);
+	if (dwReturn == ERROR_SUCCESS)
+	{
+		wprintf(L"InternetGetCookieEx2 succeeded\r\n");
+		goto dumpcookie;
+	}
+	else
+	{
+		//call with flag INTERNET_COOKIE_NON_SCRIPT
+		wprintf(L"Calling InternetGetCookieEx2 for url %s and cookie name %s dwFlags: %X = INTERNET_COOKIE_NON_SCRIPT\r\n", wszUrl, wszCookieName, dwFlags);
+		dwReturn = InternetGetCookieEx2(wszUrl, wszCookieName, dwFlags, &pInternetCookie, &dwCookieCount);
+		wprintf(L"InternetGetCookieEx returning %d Cookie count : %d\r\n", dwReturn, dwCookieCount);
+		if (dwReturn == ERROR_SUCCESS)
+		{
+			wprintf(L"InternetGetCookieEx2 succeeded\r\n");
+			goto dumpcookie;
+		}
+		else
+		{
+			wprintf(L"InternetGetCookieEx2 failed\r\n");
+			return;
+		}
+	}
+dumpcookie:
+	/*
+typedef struct {
+PWSTR    pwszName;
+PWSTR    pwszValue;
+PWSTR    pwszDomain;
+PWSTR    pwszPath;
+DWORD    dwFlags;
+FILETIME ftExpires;
+BOOL     fExpiresSet;
+} INTERNET_COOKIE2;
+		*/
+	wprintf(L"Cookie name : %s\r\n", pInternetCookie->pwszName);
+	wprintf(L"Cookie value : %s\r\n", pInternetCookie->pwszValue);
+	wprintf(L"Cookie domain:  %s\r\n", pInternetCookie->pwszDomain);
+	wprintf(L"Cookie path : %s\r\n", pInternetCookie->pwszPath);
+	wprintf(L"Cookie flags : %X\r\n", pInternetCookie->dwFlags);
+	wprintf(L"Expiry time set : %S\r\n", pInternetCookie->fExpiresSet?"true":"false");
+	wprintf(L"Expiry time : %d\r\n", pInternetCookie->ftExpires);
+}
+
 void FindCookie(WCHAR* wszUrl, WCHAR* wszCookieName)
 {
 
@@ -87,7 +174,7 @@ void FindCookie(WCHAR* wszUrl, WCHAR* wszCookieName)
 	LPTSTR lpszCookieData = NULL;   // buffer to hold the cookie data
 	DWORD dwFlags = 0L;
 
-retryEx2:
+retryEx:
 	wprintf(L"Calling InternetGetCookieEx for url %s and cookie name %s dwFlags: %X dwSize :%d\r\n", wszUrl, wszCookieName, dwFlags, dwSize);
 	bReturn = InternetGetCookieEx(wszUrl, wszCookieName, lpszCookieData, &dwSize, dwFlags, NULL);
 	wprintf(L"InternetGetCookieEx returning %d dwSize : %d\r\n", bReturn, dwSize);
@@ -98,6 +185,7 @@ retryEx2:
 		{
 			wprintf(L"Cookie data : %s.\r\n", lpszCookieData);
 			WCHAR* wszCookieName = ExtractSingleCookieToken(lpszCookieData);
+			DumpCookie(wszUrl, wszCookieName);
 			DeleteCookie(wszUrl, wszCookieName);
 		}
 		else
@@ -107,7 +195,7 @@ retryEx2:
 			// Allocate the necessary buffer.
 			lpszCookieData = new TCHAR[dwSize];
 			// Try the call again.
-			goto retryEx2;
+			goto retryEx;
 		}
 	}
 
@@ -123,7 +211,7 @@ retryEx2:
 			// Allocate the necessary buffer.
 			lpszCookieData = new TCHAR[dwSize];
 			// Try the call again.
-			goto retryEx2;
+			goto retryEx;
 		}
 		else if (dwError == ERROR_NO_MORE_ITEMS)
 		{
@@ -132,7 +220,7 @@ retryEx2:
 			{
 				wprintf(L"Re-trying with INTERNET_COOKIE_HTTPONLY flag\r\n");
 				dwFlags = INTERNET_COOKIE_HTTPONLY;
-				goto retryEx2;
+				goto retryEx;
 			}
 
 			DWORD dwFlags = 0L;
@@ -147,6 +235,7 @@ retryEx2:
 				printf("IEGetProtectedModeCookie OK\r\n");
 				printf("Cookie Data: %S Size:%u Flags:%X\r\n", szCookieData, dwSize, dwFlags);
 				WCHAR* wszCookieName= ExtractSingleCookieToken(szCookieData);
+				DumpCookie(wszUrl, wszCookieName);
 				DeleteCookie(wszUrl, wszCookieName);
 			}
 			else
