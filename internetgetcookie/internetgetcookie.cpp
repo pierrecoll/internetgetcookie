@@ -17,7 +17,7 @@ DWORD GetProcessIntegrityLevel();
 DWORD ErrorPrint();
 void CreateLowProcess();
 WCHAR* ExtractSingleCookieToken(LPTSTR lpszData);
-UINT16 ExtractCookiesToken(LPTSTR lpszData, BOOL bDisplay);
+UINT16 ExtractCookiesToken(WCHAR* wszUrl, LPTSTR lpszData, BOOL bDisplay);
 void FindCookies(WCHAR* wszUrl);
 void FindCookie(WCHAR* wszUrl, WCHAR* wszCookieName);
 BOOL DeleteCookie(WCHAR* wszUrl, WCHAR* wszCookieName);
@@ -27,8 +27,8 @@ BOOL bProtectedModeUrl = FALSE;
 DWORD dwProcessIntegrityLevel = 0;
 
 void ShowUsage()
-{	
-	printf("INTERNETGETCOOKIE  version 1.7\r\n");
+{
+	printf("INTERNETGETCOOKIE  version 1.9\r\n");
 	printf("\r\n");
 	printf("pierrelc@microsoft.com January 2021\r\n");
 	printf("Usage: INTERNETGETCOOKIE accepts an URL as parameter and optionaly a cookie name.\r\n");
@@ -40,20 +40,58 @@ void ShowUsage()
 
 int main(int argc, char* argv[])
 {
-	if ((argc != 2) && (argc != 3))
+
+	if ((argc != 2) && (argc != 3) && (argc != 4))
 	{
 		ShowUsage();
 		exit(0L);
 	}
+	if (argc == 2)
+	{
+		goto ParamParsed;
+	}
+
+ParamParsed:
 
 	WCHAR wszUrl[INTERNET_MAX_URL_LENGTH] = L"";
 	WCHAR wszCookieName[INTERNET_MAX_URL_LENGTH] = L"";
 
 	dwProcessIntegrityLevel = GetProcessIntegrityLevel();
 
+	//checking protocol of the url.Must be http or https
+	int ch = ':';
+	char* pdest;
+	char protocol[6] = "";
+	int result;
+
+	// Search forward.
+	pdest = strchr(argv[1], ch);
+	result = (int)(pdest - argv[1] + 1);
+	if (pdest != NULL)
+	{
+		if (result > 6)
+		{
+			printf("The protocol for the url must be http or https\r\n");
+			exit(-1L);
+		}
+		lstrcpynA(protocol, argv[1], result);
+		protocol[result - 1] = '\0';
+		if ((strncmp(protocol, "http", result-1) != 0) && (strncmp(protocol, "https", result-1) != 0))
+		{
+			printf("The protocol for the url must be http or https\r\n");
+			exit(-1L);
+		}
+	}
+	else
+	{
+		printf("The protocol for the url must be http or https\r\n");
+		exit(-1L);
+	}
+
 	MultiByteToWideChar(CP_ACP, 0, argv[1], strlen(argv[1]), wszUrl, INTERNET_MAX_URL_LENGTH);
 	wszUrl[strlen(argv[1])] = 0;
 	wprintf(L"Url : %s\r\n", wszUrl);
+	
 	HRESULT hr = IEIsProtectedModeURL(wszUrl);
 	if (SUCCEEDED(hr))
 	{
@@ -76,39 +114,6 @@ int main(int argc, char* argv[])
 	return 0L;
 }
 
-void print_time(void)
-{
-	struct tm newtime;
-	char am_pm[] = "AM";
-	__time64_t long_time;
-	char timebuf[26];
-	errno_t err;
-
-	// Get time as 64-bit integer.
-	_time64(&long_time);
-	// Convert to local time.
-	err = _localtime64_s(&newtime, &long_time);
-	if (err)
-	{
-		printf("Invalid argument to _localtime64_s.");
-		exit(1);
-	}
-	if (newtime.tm_hour > 12)        // Set up extension. 
-		strcpy_s(am_pm, sizeof(am_pm), "PM");
-	if (newtime.tm_hour > 12)        // Convert from 24-hour 
-		newtime.tm_hour -= 12;    // to 12-hour clock. 
-	if (newtime.tm_hour == 0)        // Set hour to 12 if midnight.
-		newtime.tm_hour = 12;
-
-	// Convert to an ASCII representation. 
-	err = asctime_s(timebuf, 26, &newtime);
-	if (err)
-	{
-		printf("Invalid argument to asctime_s.");
-		exit(1);
-	}
-	printf("\n(%.19s %s)\n", timebuf, am_pm);
-}
 
 void DumpCookie(WCHAR* wszUrl, WCHAR* wszCookieName)
 {
@@ -118,10 +123,10 @@ void DumpCookie(WCHAR* wszUrl, WCHAR* wszCookieName)
 	DWORD dwFlags = 0L;
 	DWORD dwCookieCount = 0;
 	INTERNET_COOKIE2 *pInternetCookie;
-
+retryIC2:
 	wprintf(L"Calling InternetGetCookieEx2 for url %s and cookie name %s dwFlags: %X\r\n", wszUrl, wszCookieName, dwFlags);
 	dwReturn = InternetGetCookieEx2(wszUrl, wszCookieName, dwFlags, &pInternetCookie, &dwCookieCount);
-	wprintf(L"InternetGetCookieEx returning %d Cookie Count : %d\r\n", dwReturn, dwCookieCount);
+	wprintf(L"InternetGetCookieEx2 returning %d Cookie Count : %d\r\n", dwReturn, dwCookieCount);
 	if (dwReturn == ERROR_SUCCESS)
 	{
 		wprintf(L"InternetGetCookieEx2 succeeded\r\n");
@@ -145,24 +150,102 @@ void DumpCookie(WCHAR* wszUrl, WCHAR* wszCookieName)
 		}
 	}
 dumpcookie:
-	/*
-typedef struct {
-PWSTR    pwszName;
-PWSTR    pwszValue;
-PWSTR    pwszDomain;
-PWSTR    pwszPath;
-DWORD    dwFlags;
-FILETIME ftExpires;
-BOOL     fExpiresSet;
-} INTERNET_COOKIE2;
-		*/
-	wprintf(L"Cookie name : %s\r\n", pInternetCookie->pwszName);
-	wprintf(L"Cookie value : %s\r\n", pInternetCookie->pwszValue);
-	wprintf(L"Cookie domain:  %s\r\n", pInternetCookie->pwszDomain);
-	wprintf(L"Cookie path : %s\r\n", pInternetCookie->pwszPath);
-	wprintf(L"Cookie flags : %X\r\n", pInternetCookie->dwFlags);
-	wprintf(L"Expiry time set : %S\r\n", pInternetCookie->fExpiresSet?"true":"false");
-	wprintf(L"Expiry time : %d\r\n", pInternetCookie->ftExpires);
+	if (dwCookieCount != 0)
+	{
+		wprintf(L"\tCookie name : %s\r\n", pInternetCookie->pwszName);
+		wprintf(L"\tCookie value : %s\r\n", pInternetCookie->pwszValue);
+		wprintf(L"\tCookie domain:  %s\r\n", pInternetCookie->pwszDomain);
+		wprintf(L"\tCookie path : %s\r\n", pInternetCookie->pwszPath);
+		wprintf(L"\tCookie flags : %X\r\n", pInternetCookie->dwFlags);
+
+		if (pInternetCookie->dwFlags & INTERNET_COOKIE_IS_SECURE)
+		{
+			printf("\t\tThis is a secure cookie.\r\n");
+		}		
+		if (pInternetCookie->dwFlags & INTERNET_COOKIE_IS_SESSION)
+		{
+			printf("\t\tThis is a session cookie.r\n");
+		}		
+		if (pInternetCookie->dwFlags & INTERNET_COOKIE_IS_RESTRICTED)
+		{
+			printf("\t\tThis cookie is restricted to first - party contexts.\r\n");
+		}		
+		if (pInternetCookie->dwFlags & INTERNET_COOKIE_HTTPONLY)
+		{
+			printf("\t\tThis is an HTTP - only cookie.\r\n");
+		}		
+		if (pInternetCookie->dwFlags & INTERNET_COOKIE_HOST_ONLY )
+		{
+			printf("\t\tThis is a host - only cookie.\r\n");
+		}		
+		if (pInternetCookie->dwFlags & INTERNET_COOKIE_HOST_ONLY_APPLIED)
+		{
+			printf("\t\tThe host - only setting has been applied to this cookie.\r\n");
+		}		
+		if (pInternetCookie->dwFlags & INTERNET_COOKIE_SAME_SITE_STRICT)
+		{
+			printf("\t\tThe SameSite security level for this cookie is \"strict\"\r\n");
+		}
+		if (pInternetCookie->dwFlags & INTERNET_COOKIE_SAME_SITE_LAX)
+		{
+			printf("\t\tThe SameSite security level for this cookie is \"lax\"\r\n");
+		}
+								
+		wprintf(L"\tExpiry time set : %S\r\n", pInternetCookie->fExpiresSet ? "true" : "false");
+
+		TIME_ZONE_INFORMATION tzi;
+		GetTimeZoneInformation(&tzi);
+
+		SYSTEMTIME st, stLocal;
+		BOOL bRV = FileTimeToSystemTime(&pInternetCookie->ftExpires, &st);
+		SystemTimeToTzSpecificLocalTime(&tzi, &st, &stLocal);
+		WCHAR szBuf[256];
+		GetDateFormat(LOCALE_USER_DEFAULT, DATE_LONGDATE, &stLocal, NULL, szBuf, sizeof(szBuf));
+
+		int iBufUsed = wcslen(szBuf);
+		if (iBufUsed < sizeof(szBuf) - 2)
+			szBuf[iBufUsed++] = ' ';
+		GetTimeFormat(LOCALE_USER_DEFAULT, 0, &stLocal,
+			NULL, szBuf + iBufUsed, sizeof(szBuf) - iBufUsed);
+		char OEMTime[256];
+		CharToOemBuff(szBuf, (LPSTR)OEMTime, wcslen(szBuf));
+		OEMTime[wcslen(szBuf)] = '\0';
+
+		wprintf(L"Expiry time : %S\r\n", OEMTime);
+	}
+	else
+	{
+		printf("dwCookiecount is NULL\r\n");
+		if (dwProcessIntegrityLevel == SECURITY_MANDATORY_HIGH_RID)
+		{
+			printf("Starting low cannot be done from an administrative command prompt (High Integrity Level)\r\n");
+			exit(-1L);
+		}
+		else if (dwProcessIntegrityLevel == SECURITY_MANDATORY_LOW_RID)
+		{
+
+			if (dwFlags == 0)
+			{
+				dwFlags = INTERNET_COOKIE_NON_SCRIPT;
+				goto retryIC2;
+			}
+			else
+			{
+				//¨process already Low 
+				printf("Process already running at low integrity\r\n");
+				exit(-2L);
+			}
+		}
+		else if (dwProcessIntegrityLevel == SECURITY_MANDATORY_MEDIUM_RID)
+		{
+			CreateLowProcess();
+			exit(0L);
+		}
+		else
+		{
+			printf("Unexpected integity level for -low option\r\n");
+		}
+	}
 }
 
 void FindCookie(WCHAR* wszUrl, WCHAR* wszCookieName)
@@ -284,13 +367,12 @@ BOOL DeleteCookie(WCHAR* wszUrl, WCHAR* wszCookieName)
 	c = (char)getchar();
 	if ((c == 'y') || (c == 'Y'))
 	{
-
 		getchar();  //to get cr
 
 		//cookie value does not matter
 		BOOL bReturn = FALSE;
-		wprintf(L"Deleting  cookie %s by calling InternetSetCookie with expiration date set to Sat,01-Jan-2000 00:00:00 GMT\r\n", wszCookieName);
-		bReturn = InternetSetCookieW(wszUrl, wszCookieName, TEXT("Deleted;expires=Sat,01-Jan-2000 00:00:00 GMT"));
+		wprintf(L"Deleting  cookie %s for url :%s by calling InternetSetCookie with expiration date set to Sat,01-Jan-2000 00:00:00 GMT\r\n", wszCookieName,wszUrl);
+		bReturn = InternetSetCookieW(wszUrl, wszCookieName, L"Deleted;expires=Sat,01-Jan-2000 00:00:00 GMT");
 		if (bReturn == FALSE)
 		{
 			DWORD dwError = GetLastError();
@@ -403,7 +485,7 @@ retry:
 					{
 						printf("IEGetProtectedModeCookie OK\r\n");
 						printf("Cookie Data: %S Size:%u Flags:%X\r\n", szCookieData, dwSize, dwFlags);
-						nbCookies = ExtractCookiesToken(szCookieData, TRUE);
+						nbCookies = ExtractCookiesToken(wszUrl,szCookieData, TRUE);
 					}
 					else
 					{
@@ -450,7 +532,7 @@ retry:
 		printf("InternetGetCookie succeeded.\r\n");
 		if (lpszData)
 		{
-			nbCookies = ExtractCookiesToken(lpszData,TRUE);
+			nbCookies = ExtractCookiesToken(wszUrl,lpszData,TRUE);
 		}
 		else
 		{
@@ -508,11 +590,11 @@ retryEx:
 		printf("InternetGetCookieEx succeeded.\r\n");
 		if (lpszData)
 		{
-			nbCookiesEx=ExtractCookiesToken(lpszData,FALSE);
+			nbCookiesEx=ExtractCookiesToken(wszUrl, lpszData,FALSE);
 			if (nbCookiesEx > nbCookies)
 			{
 				printf("%d HttpOnly cookies found\r\n", nbCookiesEx - nbCookies);
-				ExtractCookiesToken(lpszData, TRUE);
+				ExtractCookiesToken(wszUrl, lpszData, TRUE);
 			}
 			else
 			{
@@ -726,7 +808,7 @@ WCHAR* ExtractSingleCookieToken(LPTSTR lpszData)
 	return CookieName;
 }
 
-UINT16 ExtractCookiesToken(LPTSTR lpszData, BOOL bDisplay)
+UINT16 ExtractCookiesToken(WCHAR* wszUrl, LPTSTR lpszData, BOOL bDisplay)
 {
 	// Code to display the cookie data.
 	//+		lpszData	0x010dee48 L"WebLanguagePreference=fr-fr; WT_NVR=0=/:1=web; SRCHUID=V=2&GUID=9087E76D5D4343F5BFE07F75D80435E4&dmnchg=1; SRCHD=AF=NOFORM; WT_FPC=id=2186e6812f80d94b48a1502956146257:lv=1502956146257:ss=1502956146257...	wchar_t *
@@ -770,6 +852,7 @@ UINT16 ExtractCookiesToken(LPTSTR lpszData, BOOL bDisplay)
 					{
 						wprintf(L"Cookie %d Name  = %s\r\n", CookieNumber, CookieName);
 						wprintf(L"\tValue = %s\r\n", CookieValue);
+						DumpCookie(wszUrl, CookieName);
 					}
 					break;
 				}
@@ -777,10 +860,9 @@ UINT16 ExtractCookiesToken(LPTSTR lpszData, BOOL bDisplay)
 			token = wcstok_s(NULL, seps, &next_token);
 		}
 	}
-	if (bDisplay)
-	{
-		printf("Total number of cookies : %d\r\n", CookieNumber);
-	}
+
+	printf("Total number of cookies : %d\r\n", CookieNumber);
+	
 	//necessary for single cookie case
 	return CookieNumber;
 }
