@@ -58,6 +58,11 @@ ParamParsed:
 
 	dwProcessIntegrityLevel = GetProcessIntegrityLevel();
 
+
+	MultiByteToWideChar(CP_ACP, 0, argv[1], strlen(argv[1]), wszUrl, INTERNET_MAX_URL_LENGTH);
+	wszUrl[strlen(argv[1])] = 0;
+	wprintf(L"Url : %s\r\n", wszUrl);
+	
 	//checking protocol of the url.Must be http or https
 	int ch = ':';
 	char* pdest;
@@ -76,7 +81,8 @@ ParamParsed:
 		}
 		lstrcpynA(protocol, argv[1], result);
 		protocol[result - 1] = '\0';
-		if ((strncmp(protocol, "http", result-1) != 0) && (strncmp(protocol, "https", result-1) != 0))
+		printf("Protocol of the url:%s\r\n", protocol);
+		if ((strncmp(protocol, "http", result - 1) != 0) && (strncmp(protocol, "https", result - 1) != 0))
 		{
 			printf("The protocol for the url must be http or https\r\n");
 			exit(-1L);
@@ -88,10 +94,7 @@ ParamParsed:
 		exit(-1L);
 	}
 
-	MultiByteToWideChar(CP_ACP, 0, argv[1], strlen(argv[1]), wszUrl, INTERNET_MAX_URL_LENGTH);
-	wszUrl[strlen(argv[1])] = 0;
-	wprintf(L"Url : %s\r\n", wszUrl);
-	
+
 	HRESULT hr = IEIsProtectedModeURL(wszUrl);
 	if (SUCCEEDED(hr))
 	{
