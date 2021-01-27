@@ -81,7 +81,7 @@ ParamParsed:
 		}
 		lstrcpynA(protocol, argv[1], result);
 		protocol[result - 1] = '\0';
-		printf("Protocol of the url:%s\r\n", protocol);
+		printf("Protocol of the url is: %s\r\n", protocol);
 		if ((strncmp(protocol, "http", result - 1) != 0) && (strncmp(protocol, "https", result - 1) != 0))
 		{
 			printf("The protocol for the url must be http or https\r\n");
@@ -94,14 +94,22 @@ ParamParsed:
 		exit(-1L);
 	}
 
-
+	wprintf(L"Calling IEIsProtectedModeURL for url : %s\r\n", wszUrl);
 	HRESULT hr = IEIsProtectedModeURL(wszUrl);
-	if (SUCCEEDED(hr))
+	if (hr == S_OK)
 	{
 		bProtectedModeUrl = TRUE;
-		printf("This is a protected mode url.\r\n");
+		printf("Url would open in a protected mode process.\r\n");
 	}
-
+	else if (hr == S_FALSE)
+	{
+		printf("Url would not open in a protected mode process.\r\n");
+	}
+	else
+	{
+		printf("IEIsProtectedModeURL returning : %X\r\n", hr);
+	}
+	 
 	if (argc == 2)
 	{
 		FindCookies(wszUrl);
