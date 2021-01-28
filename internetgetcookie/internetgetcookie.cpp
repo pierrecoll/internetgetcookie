@@ -25,6 +25,8 @@ void DumpCookie(WCHAR* wszUrl, WCHAR* wszCookieName);
 
 BOOL bProtectedModeUrl = FALSE;
 DWORD dwProcessIntegrityLevel = 0;
+WCHAR wszUrl[INTERNET_MAX_URL_LENGTH] = L"";
+WCHAR wszCookieName[INTERNET_MAX_URL_LENGTH] = L"";
 
 void ShowUsage()
 {
@@ -38,31 +40,12 @@ void ShowUsage()
 	printf("and https://docs.microsoft.com/en-us/windows/win32/api/wininet/nf-wininet-internetgetcookieexa");
 }
 
-int main(int argc, char* argv[])
+BOOL SetUrl(char* Url)
 {
-
-	if ((argc != 2) && (argc != 3) && (argc != 4))
-	{
-		ShowUsage();
-		exit(0L);
-	}
-	if (argc == 2)
-	{
-		goto ParamParsed;
-	}
-
-ParamParsed:
-
-	WCHAR wszUrl[INTERNET_MAX_URL_LENGTH] = L"";
-	WCHAR wszCookieName[INTERNET_MAX_URL_LENGTH] = L"";
-
-	dwProcessIntegrityLevel = GetProcessIntegrityLevel();
-
-
-	MultiByteToWideChar(CP_ACP, 0, argv[1], strlen(argv[1]), wszUrl, INTERNET_MAX_URL_LENGTH);
-	wszUrl[strlen(argv[1])] = 0;
+	MultiByteToWideChar(CP_ACP, 0, Url, strlen(Url), wszUrl, INTERNET_MAX_URL_LENGTH);
+	wszUrl[strlen(Url)] = 0;
 	wprintf(L"Url : %s\r\n", wszUrl);
-	
+
 	//checking protocol of the url.Must be http or https
 	int ch = ':';
 	char* pdest;
@@ -70,29 +53,51 @@ ParamParsed:
 	int result;
 
 	// Search forward.
-	pdest = strchr(argv[1], ch);
-	result = (int)(pdest - argv[1] + 1);
+	pdest = strchr(Url, ch);
+	result = (int)(pdest - Url + 1);
 	if (pdest != NULL)
 	{
 		if (result > 6)
 		{
 			printf("The protocol for the url must be http or https\r\n");
-			exit(-1L);
+			return(FALSE);
 		}
-		lstrcpynA(protocol, argv[1], result);
+		lstrcpynA(protocol, Url, result);
 		protocol[result - 1] = '\0';
 		printf("Protocol of the url is: %s\r\n", protocol);
 		if ((strncmp(protocol, "http", result - 1) != 0) && (strncmp(protocol, "https", result - 1) != 0))
 		{
 			printf("The protocol for the url must be http or https\r\n");
-			exit(-1L);
+			return(FALSE);
 		}
 	}
 	else
 	{
 		printf("The protocol for the url must be http or https\r\n");
-		exit(-1L);
+		return(FALSE);
 	}
+	return(TRUE);
+}
+int main(int argc, char* argv[])
+{
+	BOOL bReturn = FALSE;
+	if ((argc != 2) && (argc != 3) && (argc != 4))
+	{
+		ShowUsage();
+		exit(0L);
+	}
+	if (argc == 2)
+	{
+		bReturn= SetUrl(argv[1]);
+		if (bReturn == FALSE)
+			exit(-1L);
+		else
+			goto ParamParsed;
+	}
+
+ParamParsed:
+
+	dwProcessIntegrityLevel = GetProcessIntegrityLevel();
 
 	wprintf(L"Calling IEIsProtectedModeURL for url : %s\r\n", wszUrl);
 	HRESULT hr = IEIsProtectedModeURL(wszUrl);
