@@ -27,6 +27,7 @@ BOOL bProtectedModeUrl = FALSE;
 DWORD dwProcessIntegrityLevel = 0;
 WCHAR wszUrl[INTERNET_MAX_URL_LENGTH] = L"";
 WCHAR wszCookieName[INTERNET_MAX_URL_LENGTH] = L"";
+BOOL bDeleteCookie = FALSE;
 
 void ShowUsage()
 {
@@ -34,8 +35,8 @@ void ShowUsage()
 	printf("\r\n");
 	printf("pierrelc@microsoft.com January 2021\r\n");
 	printf("Usage: INTERNETGETCOOKIE accepts an URL as parameter and optionaly a cookie name.\r\n");
-	printf("internetgetcookie url [cookiename]\r\n");
-	printf("When cookiename is used, gives the option to delete the cookie (sets expiration date in the past)\r\n");
+	printf("internetgetcookie [-d|-?|-h] url [cookiename]\r\n");
+	printf("-d to delete the cookie if it is found\r\n");
 	printf("See https://docs.microsoft.com/en-us/windows/win32/wininet/managing-cookies\r\n");
 	printf("and https://docs.microsoft.com/en-us/windows/win32/api/wininet/nf-wininet-internetgetcookieexa");
 }
@@ -81,10 +82,52 @@ BOOL SetUrl(char* Url)
 int main(int argc, char* argv[])
 {
 	BOOL bReturn = FALSE;
-	if ((argc != 2) && (argc != 3) && (argc != 4))
+	BOOL bSearchCookie = FALSE;
+
+	if ((argc != 2) && (argc != 3) && (argc != 4) || (argc==1))
 	{
 		ShowUsage();
 		exit(0L);
+	}
+	char arg[MAX_PATH];
+
+	strcpy_s(arg, argv[1]);
+	//_strupr_s(arg);
+	char* Parameter = strstr(arg, ":");
+
+	//First argument does not start with -
+	if (!Parameter)
+	{
+		if (argc == 2)
+		{
+			bSearchCookie = TRUE;
+		}
+		bReturn = SetUrl(argv[1]);
+		if (bReturn == FALSE)
+			exit(-1L);
+		else
+			goto ParamParsed;
+	}
+	else
+	{
+		//Help
+		if ((strcmp(arg, "-h")) || (strcmp(arg, "-?")))
+		{
+			ShowUsage();
+			exit(0L);
+		}
+
+		//Delete
+		if (strcmp(arg, "-d"))
+		{
+			if (argc != 3)
+			{
+				printf("-d option requires a cookie name as third parameter\r\n");
+				ShowUsage();
+				exit(0L);
+			}
+			bDeleteCookie = TRUE;
+		}
 	}
 	if (argc == 2)
 	{
@@ -115,11 +158,11 @@ ParamParsed:
 		printf("IEIsProtectedModeURL returning : %X\r\n", hr);
 	}
 	 
-	if (argc == 2)
+	if (bSearchCookie==FALSE)
 	{
 		FindCookies(wszUrl);
 	}
-	if (argc == 3)
+	else
 	{
 		MultiByteToWideChar(CP_ACP, 0, argv[2], strlen(argv[2]), wszCookieName, INTERNET_MAX_URL_LENGTH);
 		wszUrl[strlen(argv[1])] = 0;
@@ -285,7 +328,10 @@ retryEx:
 			wprintf(L"Cookie data : %s.\r\n", lpszCookieData);
 			WCHAR* wszCookieName = ExtractSingleCookieToken(lpszCookieData);
 			DumpCookie(wszUrl, wszCookieName);
-			DeleteCookie(wszUrl, wszCookieName);
+			if (bDeleteCookie == TRUE)
+			{
+				DeleteCookie(wszUrl, wszCookieName);
+			}
 		}
 		else
 		{
@@ -335,7 +381,10 @@ retryEx:
 				printf("Cookie Data: %S Size:%u Flags:%X\r\n", szCookieData, dwSize, dwFlags);
 				WCHAR* wszCookieName= ExtractSingleCookieToken(szCookieData);
 				DumpCookie(wszUrl, wszCookieName);
-				DeleteCookie(wszUrl, wszCookieName);
+				if (bDeleteCookie == TRUE)
+				{
+					DeleteCookie(wszUrl, wszCookieName);
+				}
 			}
 			else
 			{
