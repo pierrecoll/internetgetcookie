@@ -41,6 +41,13 @@ void ShowUsage()
 	printf("and https://docs.microsoft.com/en-us/windows/win32/api/wininet/nf-wininet-internetgetcookieexa");
 }
 
+void  SetCookie(char *CookieName)
+{
+	MultiByteToWideChar(CP_ACP, 0, CookieName, strlen(CookieName), wszCookieName, INTERNET_MAX_URL_LENGTH);
+	CookieName[strlen(CookieName)] = 0;
+	wprintf(L"Cookie Name : %s\r\n", wszCookieName);
+}
+
 BOOL SetUrl(char* Url)
 {
 	MultiByteToWideChar(CP_ACP, 0, Url, strlen(Url), wszUrl, INTERNET_MAX_URL_LENGTH);
@@ -93,49 +100,58 @@ int main(int argc, char* argv[])
 
 	strcpy_s(arg, argv[1]);
 	//_strupr_s(arg);
-	char* Parameter = strstr(arg, ":");
+	char* Parameter = strstr(arg, "-");
 
 	//First argument does not start with -
 	if (!Parameter)
 	{
-		if (argc == 2)
+		if (argc >= 2)
+		{
+			bReturn = SetUrl(argv[1]);
+			if (bReturn == FALSE)
+				exit(-1L);
+		}
+		if (argc ==3)
 		{
 			bSearchCookie = TRUE;
-		}
-		bReturn = SetUrl(argv[1]);
-		if (bReturn == FALSE)
-			exit(-1L);
-		else
+			SetCookie(argv[2]);
 			goto ParamParsed;
+		}
 	}
 	else
 	{
 		//Help
-		if ((strcmp(arg, "-h")) || (strcmp(arg, "-?")))
+		if ((!strcmp(arg, "-h")) || (!strcmp(arg, "-?")))
 		{
 			ShowUsage();
 			exit(0L);
 		}
 
 		//Delete
-		if (strcmp(arg, "-d"))
+		if (!strcmp(arg, "-d"))
 		{
-			if (argc != 3)
+			if (argc != 4)
 			{
 				printf("-d option requires a cookie name as third parameter\r\n");
 				ShowUsage();
 				exit(0L);
 			}
 			bDeleteCookie = TRUE;
+			bReturn = SetUrl(argv[2]);
+			if (bReturn == FALSE)
+				exit(-1L);
+			else
+			{
+				bSearchCookie = TRUE;
+				SetCookie(argv[3]);
+				goto ParamParsed;
+			}
 		}
-	}
-	if (argc == 2)
-	{
-		bReturn= SetUrl(argv[1]);
-		if (bReturn == FALSE)
-			exit(-1L);
 		else
-			goto ParamParsed;
+		{
+			ShowUsage();
+			exit(0L);
+		}
 	}
 
 ParamParsed:
@@ -164,9 +180,6 @@ ParamParsed:
 	}
 	else
 	{
-		MultiByteToWideChar(CP_ACP, 0, argv[2], strlen(argv[2]), wszCookieName, INTERNET_MAX_URL_LENGTH);
-		wszUrl[strlen(argv[1])] = 0;
-		wprintf(L"Cookie Name : %s.\r\n", wszCookieName);
 		FindCookie(wszUrl, wszCookieName);
 	}
 
@@ -426,72 +439,63 @@ retryEx:
 
 BOOL DeleteCookie(WCHAR* wszUrl, WCHAR* wszCookieName)
 {
-	wprintf(L"Type y if you want to delete  cookie %s for url %s or any other character to exit..........\r\n",wszCookieName,wszUrl);
-	printf("\r\n");
-	char c;
-	c = (char)getchar();
-	if ((c == 'y') || (c == 'Y'))
+	//cookie value does not matter
+	BOOL bReturn = FALSE;
+	wprintf(L"Deleting  cookie %s for url :%s by calling InternetSetCookie with expiration date set to Sat,01-Jan-2000 00:00:00 GMT\r\n", wszCookieName,wszUrl);
+	bReturn = InternetSetCookieW(wszUrl, wszCookieName, L"Deleted;expires=Sat,01-Jan-2000 00:00:00 GMT");
+	if (bReturn == FALSE)
 	{
-		getchar();  //to get cr
-
-		//cookie value does not matter
-		BOOL bReturn = FALSE;
-		wprintf(L"Deleting  cookie %s for url :%s by calling InternetSetCookie with expiration date set to Sat,01-Jan-2000 00:00:00 GMT\r\n", wszCookieName,wszUrl);
-		bReturn = InternetSetCookieW(wszUrl, wszCookieName, L"Deleted;expires=Sat,01-Jan-2000 00:00:00 GMT");
-		if (bReturn == FALSE)
+		DWORD dwError = GetLastError();
+		wprintf(L"InternetSetCookie failed with error : %d %X\r\n", dwError, dwError);
+		if (dwError == ERROR_INVALID_OPERATION)
 		{
-			DWORD dwError = GetLastError();
-			wprintf(L"InternetSetCookie failed with error : %d %X\r\n", dwError, dwError);
-			if (dwError == ERROR_INVALID_OPERATION)
+			wprintf(L"ERROR_INVALID_OPERATION -> Calling InternetSetCookieEx with flag INTERNET_COOKIE_NON_SCRIPT\r\n");
+			bReturn = InternetSetCookieEx(wszUrl, wszCookieName,
+				TEXT("Deleted;expires=Sat,01-Jan-2000 00:00:00 GMT"), INTERNET_COOKIE_NON_SCRIPT, 0);
+			if (bReturn == FALSE)
 			{
-				wprintf(L"ERROR_INVALID_OPERATION -> Calling InternetSetCookieEx with flag INTERNET_COOKIE_NON_SCRIPT\r\n");
-				bReturn = InternetSetCookieEx(wszUrl, wszCookieName,
-					TEXT("Deleted;expires=Sat,01-Jan-2000 00:00:00 GMT"), INTERNET_COOKIE_NON_SCRIPT, 0);
-				if (bReturn == FALSE)
-				{
-					dwError = GetLastError();
-					wprintf(L"InternetSetCookieEx failed with error : %d %X.\r\n", dwError, dwError);
-				}
-				else
-				{
-					wprintf(L"Calling InternetSetCookieEx to delete cookie %s succeeded.\r\n", wszCookieName);
-					return TRUE;
-				}
+				dwError = GetLastError();
+				wprintf(L"InternetSetCookieEx failed with error : %d %X.\r\n", dwError, dwError);
+			}
+			else
+			{
+				wprintf(L"Calling InternetSetCookieEx to delete cookie %s succeeded.\r\n", wszCookieName);
+				return TRUE;
 			}
 		}
-		else
-		{
-			wprintf(L"Calling InternetSetCookie to delete cookie %s succeeded.\r\n", wszCookieName);
-			return TRUE;
-		}
+	}
+	else
+	{
+		wprintf(L"Calling InternetSetCookie to delete cookie %s succeeded.\r\n", wszCookieName);
+		return TRUE;
+	}
 
-		if (bProtectedModeUrl)
+	if (bProtectedModeUrl)
+	{
+		HRESULT hr = S_FALSE;
+		wprintf(L"Deleting cookie %s by calling IESetProtectedModeCookie with expiration date set to Sat,01-Jan-2000 00:00:00 GMT\r\n", wszCookieName);
+		hr = IESetProtectedModeCookie(wszUrl, wszCookieName, TEXT("Deleted;expires=Sat,01-Jan-2000 00:00:00 GMT"), 0L);
+		if (FAILED(hr))
 		{
-			HRESULT hr = S_FALSE;
-			wprintf(L"Deleting cookie %s by calling IESetProtectedModeCookie with expiration date set to Sat,01-Jan-2000 00:00:00 GMT\r\n", wszCookieName);
-			hr = IESetProtectedModeCookie(wszUrl, wszCookieName, TEXT("Deleted;expires=Sat,01-Jan-2000 00:00:00 GMT"),0L);
+			wprintf(L"IESetProtectedModeCookie failed with error : %X\r\n", hr);
+			wprintf(L"Calling IESetProtectedModeCookie with flag INTERNET_COOKIE_NON_SCRIPT\r\n");
+			hr = IESetProtectedModeCookie(wszUrl, wszCookieName,
+				TEXT("Deleted;expires=Sat,01-Jan-2000 00:00:00 GMT"), INTERNET_COOKIE_NON_SCRIPT);
 			if (FAILED(hr))
 			{
-				wprintf(L"IESetProtectedModeCookie failed with error : %X\r\n", hr);
-				wprintf(L"Calling IESetProtectedModeCookie with flag INTERNET_COOKIE_NON_SCRIPT\r\n");
-				hr = IESetProtectedModeCookie(wszUrl, wszCookieName,
-					TEXT("Deleted;expires=Sat,01-Jan-2000 00:00:00 GMT"), INTERNET_COOKIE_NON_SCRIPT);
-				if (FAILED(hr))
-				{
-					wprintf(L"IESetProtectedModeCookie failed with error : %X.\r\n", hr);
-					return FALSE;
-				}
-				else
-				{
-					wprintf(L"Calling IESetProtectedModeCookie to delete cookie %s succeeded.\r\n", wszCookieName);
-					return TRUE;
-				}				
+				wprintf(L"IESetProtectedModeCookie failed with error : %X.\r\n", hr);
+				return FALSE;
 			}
 			else
 			{
 				wprintf(L"Calling IESetProtectedModeCookie to delete cookie %s succeeded.\r\n", wszCookieName);
 				return TRUE;
 			}
+		}
+		else
+		{
+			wprintf(L"Calling IESetProtectedModeCookie to delete cookie %s succeeded.\r\n", wszCookieName);
+			return TRUE;
 		}
 	}
 	return FALSE;
