@@ -28,17 +28,19 @@ DWORD dwProcessIntegrityLevel = 0;
 WCHAR wszUrl[INTERNET_MAX_URL_LENGTH] = L"";
 WCHAR wszCookieName[INTERNET_MAX_URL_LENGTH] = L"";
 BOOL bDeleteCookie = FALSE;
+BOOL bVerbose = FALSE;
 
 void ShowUsage()
 {
-	printf("INTERNETGETCOOKIE  version 1.9\r\n");
-	printf("\r\n");
-	printf("pierrelc@microsoft.com January 2021\r\n");
-	printf("Usage: INTERNETGETCOOKIE accepts an URL as parameter and optionaly a cookie name.\r\n");
-	printf("internetgetcookie [-d|-?|-h] url [cookiename]\r\n");
-	printf("-d to delete the cookie if it is found\r\n");
-	printf("See https://docs.microsoft.com/en-us/windows/win32/wininet/managing-cookies\r\n");
-	printf("and https://docs.microsoft.com/en-us/windows/win32/api/wininet/nf-wininet-internetgetcookieexa");
+	wprintf(L"INTERNETGETCOOKIE  version 2.0\r\n");
+	wprintf(L"\r\n");
+	wprintf(L"pierrelc@microsoft.com January 2021\r\n");
+	wprintf(L"Usage: INTERNETGETCOOKIE accepts an URL as parameter and optionaly a cookie name.\r\n");
+	wprintf(L"internetgetcookie [-d[v]|-v|-?|-h] url [cookiename]\r\n");
+	wprintf(L"-d to delete the cookie if it is found\r\n");
+	wprintf(L"-v or -dv for verbose mode\r\n");
+	wprintf(L"See https://docs.microsoft.com/en-us/windows/win32/wininet/managing-cookies\r\n");
+	wprintf(L"and https://docs.microsoft.com/en-us/windows/win32/api/wininet/nf-wininet-internetgetcookieexa");
 }
 
 void  SetCookie(char *CookieName)
@@ -67,21 +69,21 @@ BOOL SetUrl(char* Url)
 	{
 		if (result > 6)
 		{
-			printf("The protocol for the url must be http or https\r\n");
+			wprintf(L"The protocol for the url must be http or https\r\n");
 			return(FALSE);
 		}
 		lstrcpynA(protocol, Url, result);
 		protocol[result - 1] = '\0';
-		printf("Protocol of the url is: %s\r\n", protocol);
+		wprintf(L"Protocol of the url is: %s\r\n", protocol);
 		if ((strncmp(protocol, "http", result - 1) != 0) && (strncmp(protocol, "https", result - 1) != 0))
 		{
-			printf("The protocol for the url must be http or https\r\n");
+			wprintf(L"The protocol for the url must be http or https\r\n");
 			return(FALSE);
 		}
 	}
 	else
 	{
-		printf("The protocol for the url must be http or https\r\n");
+		wprintf(L"The protocol for the url must be http or https\r\n");
 		return(FALSE);
 	}
 	return(TRUE);
@@ -128,19 +130,40 @@ int main(int argc, char* argv[])
 		}
 
 		//Delete
-		if (!strcmp(arg, "-d"))
+		else if ((!strcmp(arg, "-d")) || (!strcmp(arg, "-dv")))
 		{
 			if (argc != 4)
 			{
-				printf("-d option requires a cookie name as third parameter\r\n");
+				wprintf(L"-d option requires a cookie name as third parameter\r\n");
 				ShowUsage();
 				exit(0L);
+			}
+			if (!strcmp(arg, "-dv"))
+			{
+				bVerbose = TRUE;
+				wprintf(L"Verbose mode on\r\n");
 			}
 			bDeleteCookie = TRUE;
 			bReturn = SetUrl(argv[2]);
 			if (bReturn == FALSE)
 				exit(-1L);
 			else
+			{
+				bSearchCookie = TRUE;
+				SetCookie(argv[3]);
+				goto ParamParsed;
+			}
+		}
+		else if (!strcmp(arg, "-v")) 
+		{
+			bVerbose = TRUE;
+			wprintf(L"Verbose mode on\r\n");
+			bReturn = SetUrl(argv[2]);
+			if (bReturn == FALSE)
+			{
+				exit(-1L);
+			}
+			if (argc==4)
 			{
 				bSearchCookie = TRUE;
 				SetCookie(argv[3]);
@@ -163,15 +186,15 @@ ParamParsed:
 	if (hr == S_OK)
 	{
 		bProtectedModeUrl = TRUE;
-		printf("Url would open in a protected mode process.\r\n");
+		wprintf(L"Url would open in a protected mode process.\r\n");
 	}
 	else if (hr == S_FALSE)
 	{
-		printf("Url would not open in a protected mode process.\r\n");
+		wprintf(L"Url would not open in a protected mode process.\r\n");
 	}
 	else
 	{
-		printf("IEIsProtectedModeURL returning : %X\r\n", hr);
+		wprintf(L"IEIsProtectedModeURL returning : %X\r\n", hr);
 	}
 	 
 	if (bSearchCookie==FALSE)
@@ -232,35 +255,35 @@ dumpcookie:
 
 		if (pInternetCookie->dwFlags & INTERNET_COOKIE_IS_SECURE)
 		{
-			printf("\t\tThis is a secure cookie.\r\n");
+			wprintf(L"\t\tThis is a secure cookie.\r\n");
 		}		
 		if (pInternetCookie->dwFlags & INTERNET_COOKIE_IS_SESSION)
 		{
-			printf("\t\tThis is a session cookie.r\n");
+			wprintf(L"\t\tThis is a session cookie.r\n");
 		}		
 		if (pInternetCookie->dwFlags & INTERNET_COOKIE_IS_RESTRICTED)
 		{
-			printf("\t\tThis cookie is restricted to first - party contexts.\r\n");
+			wprintf(L"\t\tThis cookie is restricted to first - party contexts.\r\n");
 		}		
 		if (pInternetCookie->dwFlags & INTERNET_COOKIE_HTTPONLY)
 		{
-			printf("\t\tThis is an HTTP - only cookie.\r\n");
+			wprintf(L"\t\tThis is an HTTP - only cookie.\r\n");
 		}		
 		if (pInternetCookie->dwFlags & INTERNET_COOKIE_HOST_ONLY )
 		{
-			printf("\t\tThis is a host - only cookie.\r\n");
+			wprintf(L"\t\tThis is a host - only cookie.\r\n");
 		}		
 		if (pInternetCookie->dwFlags & INTERNET_COOKIE_HOST_ONLY_APPLIED)
 		{
-			printf("\t\tThe host - only setting has been applied to this cookie.\r\n");
+			wprintf(L"\t\tThe host - only setting has been applied to this cookie.\r\n");
 		}		
 		if (pInternetCookie->dwFlags & INTERNET_COOKIE_SAME_SITE_STRICT)
 		{
-			printf("\t\tThe SameSite security level for this cookie is \"strict\"\r\n");
+			wprintf(L"\t\tThe SameSite security level for this cookie is \"strict\"\r\n");
 		}
 		if (pInternetCookie->dwFlags & INTERNET_COOKIE_SAME_SITE_LAX)
 		{
-			printf("\t\tThe SameSite security level for this cookie is \"lax\"\r\n");
+			wprintf(L"\t\tThe SameSite security level for this cookie is \"lax\"\r\n");
 		}
 								
 		wprintf(L"\tExpiry time set : %S\r\n", pInternetCookie->fExpiresSet ? "true" : "false");
@@ -287,10 +310,10 @@ dumpcookie:
 	}
 	else
 	{
-		printf("dwCookiecount is NULL\r\n");
+		wprintf(L"dwCookiecount is NULL\r\n");
 		if (dwProcessIntegrityLevel == SECURITY_MANDATORY_HIGH_RID)
 		{
-			printf("Starting low cannot be done from an administrative command prompt (High Integrity Level)\r\n");
+			wprintf(L"Starting low cannot be done from an administrative command prompt (High Integrity Level)\r\n");
 			exit(-1L);
 		}
 		else if (dwProcessIntegrityLevel == SECURITY_MANDATORY_LOW_RID)
@@ -304,7 +327,7 @@ dumpcookie:
 			else
 			{
 				//¨process already Low 
-				printf("Process already running at low integrity\r\n");
+				wprintf(L"Process already running at low integrity\r\n");
 				exit(-2L);
 			}
 		}
@@ -315,7 +338,7 @@ dumpcookie:
 		}
 		else
 		{
-			printf("Unexpected integity level for -low option\r\n");
+			wprintf(L"Unexpected integity level for -low option\r\n");
 		}
 	}
 }
@@ -386,12 +409,12 @@ retryEx:
 			HRESULT hr = E_FAIL;
 			DWORD dwSize = MAX_PATH;
 
-			printf("Protected mode url : calling IEGetProtectedModeCookie with dwFlags set to zero\r\n");
+			wprintf(L"Protected mode url : calling IEGetProtectedModeCookie with dwFlags set to zero\r\n");
 			hr = IEGetProtectedModeCookie(wszUrl, wszCookieName, szCookieData, &dwSize, dwFlags);
 			if (SUCCEEDED(hr))
 			{
-				printf("IEGetProtectedModeCookie OK\r\n");
-				printf("Cookie Data: %S Size:%u Flags:%X\r\n", szCookieData, dwSize, dwFlags);
+				wprintf(L"IEGetProtectedModeCookie OK\r\n");
+				wprintf(L"Cookie Data: %S Size:%u Flags:%X\r\n", szCookieData, dwSize, dwFlags);
 				WCHAR* wszCookieName= ExtractSingleCookieToken(szCookieData);
 				DumpCookie(wszUrl, wszCookieName);
 				if (bDeleteCookie == TRUE)
@@ -402,17 +425,17 @@ retryEx:
 			else
 			{
 				DWORD dwError = GetLastError();
-				printf("IEGetProtectedModeCookie returning error: %X\r\n", dwError);  //getting 0x1f ERROR_GEN_FAILURE
-				printf("Trying to restart the process with Low Integrity Level\r\n");
+				wprintf(L"IEGetProtectedModeCookie returning error: %X\r\n", dwError);  //getting 0x1f ERROR_GEN_FAILURE
+				wprintf(L"Trying to restart the process with Low Integrity Level\r\n");
 				if (dwProcessIntegrityLevel == SECURITY_MANDATORY_HIGH_RID)
 				{
-					printf("Starting low cannot be done from an administrative command prompt (High Integrity Level)\r\n");
+					wprintf(L"Starting low cannot be done from an administrative command prompt (High Integrity Level)\r\n");
 					exit(-1L);
 				}
 				else if (dwProcessIntegrityLevel == SECURITY_MANDATORY_LOW_RID)
 				{
 					//¨process already Low 
-					printf("Process already running at low integrity\r\n");
+					wprintf(L"Process already running at low integrity\r\n");
 					exit(-2L);
 				}
 				else if (dwProcessIntegrityLevel == SECURITY_MANDATORY_MEDIUM_RID)
@@ -422,7 +445,7 @@ retryEx:
 				}
 				else
 				{
-					printf("Unexpected integity level for -low option\r\n");
+					wprintf(L"Unexpected integity level for -low option\r\n");
 				}
 			}
 		}
@@ -503,8 +526,8 @@ BOOL DeleteCookie(WCHAR* wszUrl, WCHAR* wszCookieName)
 
 void FindCookies(WCHAR *wszUrl)
 {
-	printf("No cookie name given\r\n");
-	printf("\r\n");
+	wprintf(L"No cookie name given\r\n");
+	wprintf(L"\r\n");
 	WCHAR szDecodedUrl[INTERNET_MAX_URL_LENGTH] = L"";
 	DWORD cchDecodedUrl = INTERNET_MAX_URL_LENGTH;
 	WCHAR szOut[INTERNET_MAX_URL_LENGTH] = L"";
@@ -540,7 +563,7 @@ retry:
 			// Error handling code.			
 			if (dwError == ERROR_NO_MORE_ITEMS)
 			{
-				printf("InternetGetCookie returning ERROR_NO_MORE_ITEMS\r\n");
+				wprintf(L"InternetGetCookie returning ERROR_NO_MORE_ITEMS\r\n");
 				if (bProtectedModeUrl == TRUE)
 				{
 					DWORD dwFlags = 0L;
@@ -548,28 +571,28 @@ retry:
 					HRESULT hr = E_FAIL;
 					DWORD dwSize = MAX_PATH;
 
-					printf("Protected mode url : calling IEGetProtectedModeCookie with dwFlags set to zero\r\n");
+					wprintf(L"Protected mode url : calling IEGetProtectedModeCookie with dwFlags set to zero\r\n");
 					hr = IEGetProtectedModeCookie(wszUrl, NULL, szCookieData, &dwSize, dwFlags);
 					if (SUCCEEDED(hr))
 					{
-						printf("IEGetProtectedModeCookie OK\r\n");
-						printf("Cookie Data: %S Size:%u Flags:%X\r\n", szCookieData, dwSize, dwFlags);
+						wprintf(L"IEGetProtectedModeCookie OK\r\n");
+						wprintf(L"Cookie Data: %S Size:%u Flags:%X\r\n", szCookieData, dwSize, dwFlags);
 						nbCookies = ExtractCookiesToken(wszUrl,szCookieData, TRUE);
 					}
 					else
 					{
 						DWORD dwError = GetLastError();
-						printf("IEGetProtectedModeCookie returning error: %X\r\n", dwError);  //getting 0x1f ERROR_GEN_FAILURE
-						printf("Trying to restart the process with Low Integrity Level\r\n");
+						wprintf(L"IEGetProtectedModeCookie returning error: %X\r\n", dwError);  //getting 0x1f ERROR_GEN_FAILURE
+						wprintf(L"Trying to restart the process with Low Integrity Level\r\n");
 						if (dwProcessIntegrityLevel == SECURITY_MANDATORY_HIGH_RID)
 						{
-							printf("Starting low cannot be done from an administrative command prompt (High Integrity Level)\r\n");
+							wprintf(L"Starting low cannot be done from an administrative command prompt (High Integrity Level)\r\n");
 							exit(-1L);
 						}
 						else if (dwProcessIntegrityLevel == SECURITY_MANDATORY_LOW_RID)
 						{
 							//¨process already Low 
-							printf("Process already running at low integrity\r\n");
+							wprintf(L"Process already running at low integrity\r\n");
 							exit(-2L);
 						}
 						else if (dwProcessIntegrityLevel == SECURITY_MANDATORY_MEDIUM_RID)
@@ -579,26 +602,26 @@ retry:
 						}
 						else
 						{
-							printf("Unexpected integity level for -low option\r\n");
+							wprintf(L"Unexpected integity level for -low option\r\n");
 						}
 					}
 				}
 				else
 				{
-					printf("No cookie found for the specified URL\r\n");
+					wprintf(L"No cookie found for the specified URL\r\n");
 					exit(1L);
 				}
 			}
 			else
 			{
-				printf("InternetGetCookie failed with error %d.\r\n", dwError);
+				wprintf(L"InternetGetCookie failed with error %d.\r\n", dwError);
 				exit(-1L);
 			}
 		}
 	}
 	else
 	{
-		printf("InternetGetCookie succeeded.\r\n");
+		wprintf(L"InternetGetCookie succeeded.\r\n");
 		if (lpszData)
 		{
 			nbCookies = ExtractCookiesToken(wszUrl,lpszData,TRUE);
@@ -616,7 +639,7 @@ retry:
 		delete[]lpszData;
 	}
 
-	printf("Searching for cookies with HttpOnly flag\r\n");
+	wprintf(L"Searching for cookies with HttpOnly flag\r\n");
 	lpszData = NULL;   // buffer to hold the cookie data
 	dwSize = 0;           // variable to get the buffer size needed
 	DWORD dwFlags = INTERNET_COOKIE_NON_SCRIPT;
@@ -644,30 +667,30 @@ retryEx:
 			// Error handling code.			
 			if (dwError == ERROR_NO_MORE_ITEMS)
 			{
-				printf("There is no cookie for the specified URL and all its parents.\r\n");
+				wprintf(L"There is no cookie for the specified URL and all its parents.\r\n");
 				exit(1L);
 			}
 			else
 			{
-				printf("InternetGetCookieEx failed with error %d.\r\n", dwError);
+				wprintf(L"InternetGetCookieEx failed with error %d.\r\n", dwError);
 				exit(-1L);
 			}
 		}
 	}
 	else
 	{
-		printf("InternetGetCookieEx succeeded.\r\n");
+		wprintf(L"InternetGetCookieEx succeeded.\r\n");
 		if (lpszData)
 		{
 			nbCookiesEx=ExtractCookiesToken(wszUrl, lpszData,FALSE);
 			if (nbCookiesEx > nbCookies)
 			{
-				printf("%d HttpOnly cookies found\r\n", nbCookiesEx - nbCookies);
+				wprintf(L"%d HttpOnly cookies found\r\n", nbCookiesEx - nbCookies);
 				ExtractCookiesToken(wszUrl, lpszData, TRUE);
 			}
 			else
 			{
-				printf("No HttpOnly cookies found\r\n");
+				wprintf(L"No HttpOnly cookies found\r\n");
 			}
 		}
 		else
@@ -726,38 +749,38 @@ void CreateLowProcess()
 						0, NULL, NULL, &StartupInfo, &ProcInfo);
 					if (!bRet)
 					{
-						printf("CreateProcessAsUserW failed\r\n");
+						wprintf(L"CreateProcessAsUserW failed\r\n");
 						ErrorPrint();
 					}
 					else
 					{
-						printf("CreateProcessAsUser %ws with Low Integrity. Command line: %ws\r\n", wszProcessName, lpwszCommandLine);
+						wprintf(L"CreateProcessAsUser %ws with Low Integrity. Command line: %ws\r\n", wszProcessName, lpwszCommandLine);
 					}
 				}
 				else
 				{
-					printf("SetTokenInformation failed\r\n");
+					wprintf(L"SetTokenInformation failed\r\n");
 					ErrorPrint();
 				}
 				LocalFree(pIntegritySid);
 			}
 			else
 			{
-				printf("ConvertStringSidToSidW failed\r\n");
+				wprintf(L"ConvertStringSidToSidW failed\r\n");
 				ErrorPrint();
 			}
 			CloseHandle(hNewToken);
 		}
 		else
 		{
-			printf("DuplicateTokenEx failed\r\n");
+			wprintf(L"DuplicateTokenEx failed\r\n");
 			ErrorPrint();
 		}
 		CloseHandle(hToken);
 	}
 	else
 	{
-		printf("OpenProcessToken failed\r\n");
+		wprintf(L"OpenProcessToken failed\r\n");
 		ErrorPrint();
 	}
 }
@@ -813,7 +836,7 @@ DWORD GetProcessIntegrityLevel()
 					}
 					else
 					{
-						printf("GetProcessIntegrityLevel: GetTokenInformation failed\r\n");
+						wprintf(L"GetProcessIntegrityLevel: GetTokenInformation failed\r\n");
 						ErrorPrint();
 					}
 					LocalFree(pTIL);
@@ -824,7 +847,7 @@ DWORD GetProcessIntegrityLevel()
 	}
 	else
 	{
-		printf("GetProcessIntegrityLevel: OpenProcessToken failed\r\n");
+		wprintf(L"GetProcessIntegrityLevel: OpenProcessToken failed\r\n");
 		ErrorPrint();
 	}
 	return -1;
@@ -930,7 +953,7 @@ UINT16 ExtractCookiesToken(WCHAR* wszUrl, LPTSTR lpszData, BOOL bDisplay)
 		}
 	}
 
-	printf("Total number of cookies : %d\r\n", CookieNumber);
+	wprintf(L"Total number of cookies : %d\r\n", CookieNumber);
 	
 	//necessary for single cookie case
 	return CookieNumber;
