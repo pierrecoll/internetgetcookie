@@ -34,7 +34,7 @@ void ShowUsage()
 {
 	wprintf(L"INTERNETGETCOOKIE  version 2.0\r\n");
 	wprintf(L"\r\n");
-	wprintf(L"pierrelc@microsoft.com January 2021\r\n");
+	wprintf(L"pierrelc@microsoft.com February 2021\r\n");
 	wprintf(L"Usage: INTERNETGETCOOKIE accepts an URL as parameter and optionaly a cookie name.\r\n");
 	wprintf(L"internetgetcookie [-d[v]|-v|-?|-h] url [cookiename]\r\n");
 	wprintf(L"-d to delete the cookie if it is found\r\n");
@@ -311,7 +311,7 @@ dumpcookie:
 	}
 	else
 	{
-		wprintf(L"dwCookiecount is NULL\r\n");
+		if (bVerbose) wprintf(L"dwCookiecount is NULL\r\n");
 		if (dwProcessIntegrityLevel == SECURITY_MANDATORY_HIGH_RID)
 		{
 			wprintf(L"Starting low cannot be done from an administrative command prompt (High Integrity Level)\r\n");
@@ -687,12 +687,12 @@ retryEx:
 			nbCookiesEx=ExtractCookiesToken(wszUrl, lpszData,FALSE);
 			if (nbCookiesEx > nbCookies)
 			{
-				if (bVerbose) wprintf(L"%d HttpOnly cookies found\r\n", nbCookiesEx - nbCookies);
+				wprintf(L"%d HttpOnly cookies found\r\n", nbCookiesEx - nbCookies);
 				ExtractCookiesToken(wszUrl, lpszData, TRUE);
 			}
 			else
 			{
-				if (bVerbose) wprintf(L"No HttpOnly cookies found\r\n");
+				wprintf(L"No HttpOnly cookies found\r\n");
 			}
 		}
 		else
