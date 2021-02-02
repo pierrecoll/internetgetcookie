@@ -230,6 +230,7 @@ retryIC2:
 	else
 	{
 		//call with flag INTERNET_COOKIE_NON_SCRIPT
+		dwFlags = INTERNET_COOKIE_NON_SCRIPT;
 		if (bVerbose) wprintf(L"Calling InternetGetCookieEx2 for url %s and cookie name %s dwFlags: %X = INTERNET_COOKIE_NON_SCRIPT\r\n", wszUrl, wszCookieName, dwFlags);
 		dwReturn = InternetGetCookieEx2(wszUrl, wszCookieName, dwFlags, &pInternetCookie, &dwCookieCount);
 		if (bVerbose) wprintf(L"InternetGetCookieEx returning %d Cookie count : %d\r\n", dwReturn, dwCookieCount);
