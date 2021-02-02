@@ -329,7 +329,8 @@ dumpcookie:
 			else
 			{
 				//¨process already Low 
-				wprintf(L"Process already running at low integrity\r\n");
+				if (bVerbose) wprintf(L"Process already running at low integrity\r\n");
+				wprintf(L"Cookie not found\r\n");
 				exit(-2L);
 			}
 		}
@@ -438,7 +439,9 @@ retryEx:
 				else if (dwProcessIntegrityLevel == SECURITY_MANDATORY_LOW_RID)
 				{
 					//¨process already Low 
-					wprintf(L"Process already running at low integrity\r\n");
+					if (bVerbose) wprintf(L"Process already running at low integrity\r\n");
+					wprintf(L"\r\nCookie not found\r\n");
+					wprintf(L"Type enter to exit low integrity mode\r\n");
 					exit(-2L);
 				}
 				else if (dwProcessIntegrityLevel == SECURITY_MANDATORY_MEDIUM_RID)
@@ -596,6 +599,8 @@ retry:
 						{
 							//¨process already Low 
 							if (bVerbose) wprintf(L"Process already running at low integrity\r\n");
+							wprintf(L"\r\nNo cookie found\r\n");
+							wprintf(L"Type enter to exit low integrity mode\r\n");
 							exit(-2L);
 						}
 						else if (dwProcessIntegrityLevel == SECURITY_MANDATORY_MEDIUM_RID)
