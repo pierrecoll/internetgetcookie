@@ -32,8 +32,7 @@ BOOL bVerbose = FALSE;
 
 void ShowUsage()
 {
-	wprintf(L"INTERNETGETCOOKIE  version 2.0\r\n");
-	wprintf(L"\r\n");
+	wprintf(L"INTERNETGETCOOKIE  version 2.0\r\n");	
 	wprintf(L"pierrelc@microsoft.com February 2021\r\n");
 	wprintf(L"Usage: INTERNETGETCOOKIE accepts an URL as parameter and optionaly a cookie name.\r\n");
 	wprintf(L"internetgetcookie [-d[v]|-v|-?|-h] url [cookiename]\r\n");
@@ -181,6 +180,11 @@ ParamParsed:
 
 	dwProcessIntegrityLevel = GetProcessIntegrityLevel();
 
+	if (dwProcessIntegrityLevel == SECURITY_MANDATORY_HIGH_RID)
+	{
+		wprintf(L"This tool should not be started from a non administrative command prompt (High Integrity Level)\r\n");
+		exit(-1L);
+	}
 	if (bVerbose) wprintf(L"Calling IEIsProtectedModeURL for url : %s\r\n", wszUrl);
 	HRESULT hr = IEIsProtectedModeURL(wszUrl);
 	if (hr == S_OK)
@@ -313,12 +317,8 @@ dumpcookie:
 	else
 	{
 		if (bVerbose) wprintf(L"dwCookiecount is NULL\r\n");
-		if (dwProcessIntegrityLevel == SECURITY_MANDATORY_HIGH_RID)
-		{
-			wprintf(L"Starting low cannot be done from an administrative command prompt (High Integrity Level)\r\n");
-			exit(-1L);
-		}
-		else if (dwProcessIntegrityLevel == SECURITY_MANDATORY_LOW_RID)
+
+		if (dwProcessIntegrityLevel == SECURITY_MANDATORY_LOW_RID)
 		{
 
 			if (dwFlags == 0)
@@ -431,12 +431,8 @@ retryEx:
 				DWORD dwError = GetLastError();
 				if (bVerbose) wprintf(L"IEGetProtectedModeCookie returning error: %X\r\n", dwError);  //getting 0x1f ERROR_GEN_FAILURE
 				wprintf(L"Trying to restart the process with Low Integrity Level\r\n");
-				if (dwProcessIntegrityLevel == SECURITY_MANDATORY_HIGH_RID)
-				{
-					wprintf(L"Starting low cannot be done from an administrative command prompt (High Integrity Level)\r\n");
-					exit(-1L);
-				}
-				else if (dwProcessIntegrityLevel == SECURITY_MANDATORY_LOW_RID)
+
+				if (dwProcessIntegrityLevel == SECURITY_MANDATORY_LOW_RID)
 				{
 					//¨process already Low 
 					if (bVerbose) wprintf(L"Process already running at low integrity\r\n");
@@ -590,12 +586,7 @@ retry:
 						DWORD dwError = GetLastError();
 						if (bVerbose) wprintf(L"IEGetProtectedModeCookie returning error: %X\r\n", dwError);  //getting 0x1f ERROR_GEN_FAILURE
 						if (bVerbose) wprintf(L"Trying to restart the process with Low Integrity Level\r\n");
-						if (dwProcessIntegrityLevel == SECURITY_MANDATORY_HIGH_RID)
-						{
-							if (bVerbose) wprintf(L"Starting low cannot be done from an administrative command prompt (High Integrity Level)\r\n");
-							exit(-1L);
-						}
-						else if (dwProcessIntegrityLevel == SECURITY_MANDATORY_LOW_RID)
+						if (dwProcessIntegrityLevel == SECURITY_MANDATORY_LOW_RID)
 						{
 							//¨process already Low 
 							if (bVerbose) wprintf(L"Process already running at low integrity\r\n");
@@ -616,7 +607,7 @@ retry:
 				}
 				else
 				{
-					if (bVerbose) wprintf(L"No cookie found for the specified URL\r\n");
+					wprintf(L"No cookie found for the specified URL\r\n");
 					exit(1L);
 				}
 			}
